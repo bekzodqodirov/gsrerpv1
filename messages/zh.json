@@ -37,7 +37,9 @@
     "inactive": "停用",
     "empty": "未找到客户",
     "created": "客户已创建，编码：{code}",
-    "saveError": "保存失败，请检查字段。"
+    "saveError": "保存失败，请检查字段。",
+    "codeAuto": "留空则自动生成",
+    "codeTaken": "该编码已被占用，请更换。"
   },
   "auth": {
     "title": "登录系统",

@@ -37,7 +37,9 @@
     "inactive": "Inactive",
     "empty": "No clients found",
     "created": "Client created. Code: {code}",
-    "saveError": "Save failed. Check the fields."
+    "saveError": "Save failed. Check the fields.",
+    "codeAuto": "auto if left empty",
+    "codeTaken": "This code is taken — choose another."
   },
   "auth": {
     "title": "Sign in",

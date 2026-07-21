@@ -37,7 +37,9 @@
     "inactive": "Nofaol",
     "empty": "Mijozlar topilmadi",
     "created": "Mijoz yaratildi. Kodi: {code}",
-    "saveError": "Saqlashda xatolik. Maydonlarni tekshiring."
+    "saveError": "Saqlashda xatolik. Maydonlarni tekshiring.",
+    "codeAuto": "bo'sh qoldirsangiz avtomatik",
+    "codeTaken": "Bu kod band — boshqasini kiriting."
   },
   "auth": {
     "title": "Tizimga kirish",

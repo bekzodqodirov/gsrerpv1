@@ -34,6 +34,15 @@ export function ClientForm() {
           <input name="name" required minLength={2} className={inputCls} />
         </label>
         <label className="block text-sm font-medium">
+          {t("code")}
+          <input
+            name="code"
+            placeholder={t("codeAuto")}
+            pattern="[A-Za-z0-9_\-]{2,32}"
+            className={inputCls}
+          />
+        </label>
+        <label className="block text-sm font-medium">
           {t("phone")}
           <input name="phone" className={inputCls} />
         </label>
@@ -63,7 +72,9 @@ export function ClientForm() {
       </div>
 
       {state.error && (
-        <p className="mt-3 text-sm text-red-600">{t("saveError")}</p>
+        <p className="mt-3 text-sm text-red-600">
+          {state.error === "codeTaken" ? t("codeTaken") : t("saveError")}
+        </p>
       )}
       {state.createdCode && (
         <p className="mt-3 text-sm text-green-600">

@@ -37,7 +37,17 @@ export async function createClient(input: ClientCreateInput) {
   const session = await requirePermission("clients.manage");
   const data = clientCreateSchema.parse(input);
 
-  const code = await nextNumber("client");
+  // Qo'lda kiritilgan kod — katta harfga keltiriladi va bandligi tekshiriladi
+  let code: string;
+  if (data.code) {
+    code = data.code.toUpperCase();
+    const taken = await db.query.clients.findFirst({
+      where: eq(clients.code, code),
+    });
+    if (taken) throw new Error("CODE_TAKEN");
+  } else {
+    code = await nextNumber("client");
+  }
   const [client] = await db
     .insert(clients)
     .values({

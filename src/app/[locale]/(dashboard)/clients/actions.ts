@@ -13,6 +13,7 @@ export async function createClientAction(
   // formData.get() maydon bo'lmasa null qaytaradi — Zod uchun ""ga keltiramiz
   const str = (k: string) => String(formData.get(k) ?? "");
   const raw = {
+    code: str("code"),
     name: str("name"),
     phone: str("phone"),
     telegram: str("telegram"),
@@ -32,6 +33,12 @@ export async function createClientAction(
     revalidatePath("/[locale]/clients", "page");
     return { createdCode: client.code };
   } catch (e) {
+    // Kod bandligi: servis tekshiruvi yoki DB unique constraint (poyga holati)
+    const msg = e instanceof Error ? e.message : "";
+    const pgCode = (e as { cause?: { code?: string } })?.cause?.code;
+    if (msg === "CODE_TAKEN" || msg.includes("duplicate key") || pgCode === "23505") {
+      return { error: "codeTaken" };
+    }
     console.error("[clients] server error:", e);
     return { error: "server" };
   }
