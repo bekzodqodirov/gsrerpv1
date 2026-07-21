@@ -11,23 +11,33 @@ Korxona boshqaruv tizimi: ombor, savdo (CRM), moliya va HR — bitta ilovada.
 
 ## Ishga tushirish (dev)
 
+**Talablar:** Node.js 20+ va Docker (Postgres uchun) — Docker Desktop **ishga tushgan** bo'lishi shart.
+
 ```bash
 # 1. Bog'liqliklar
 npm install
 
 # 2. Muhit o'zgaruvchilari
-cp .env.example .env.local
+cp .env.example .env.local        # Windows (cmd): copy .env.example .env.local
+#    .env.local dagi AUTH_SECRET ni haqiqiy uzun satrga o'zgartiring
 
-# 3. Ma'lumotlar bazasi (Docker kerak)
+# 3. Ma'lumotlar bazasi (Docker Desktop ishga tushgan bo'lsin)
 docker compose up -d
 
-# 4. Migratsiyalar
-npm run db:generate   # sxemadan SQL yaratish
-npm run db:migrate    # bazaga qo'llash
+# 4. Migratsiyalar (SQL allaqachon repo'da — db:generate SHART EMAS)
+npm run db:migrate
 
-# 5. Server
-npm run dev           # http://localhost:3000
+# 5. Seed: admin, rollar, huquqlar, omborlar, mashinalar
+npm run db:seed
+npm run db:seed:demo              # (ixtiyoriy) namuna mijoz + yuklar — ekranlar to'ldiriladi
+
+# 6. Server
+npm run dev                       # http://localhost:3000  (kirish: admin / admin123)
 ```
+
+> Docker bo'lmasa: istalgan Postgres 16'ni ishlatib, `.env.local` dagi
+> `DATABASE_URL` ni o'shanga moslang. `db:migrate`/`db:seed` `.env.local` ni
+> avtomatik o'qiydi.
 
 ## Struktura
 
