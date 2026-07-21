@@ -4,6 +4,16 @@ import { getCargo } from "@/modules/cargo/service";
 import { listAttachments } from "@/modules/shared/attachments";
 import { statusColors } from "@/components/cargo-status";
 import { Link } from "@/i18n/routing";
+import {
+  Badge,
+  Card,
+  StatCard,
+  TableWrap,
+  Th,
+  Td,
+  TRow,
+} from "@/components/ui";
+import { icons } from "@/components/icons";
 
 export default async function CargoDetailPage({
   params,
@@ -24,135 +34,130 @@ export default async function CargoDetailPage({
   ]);
 
   return (
-    <main className="space-y-6 p-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-mono text-2xl font-bold">{cargo.regNumber}</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            <span className="font-mono font-semibold">{clientCode}</span>{" "}
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-xl font-bold sm:text-2xl">
+              {cargo.regNumber}
+            </h1>
+            <Badge className={statusColors[cargo.status] ?? ""}>
+              {ts(cargo.status)}
+            </Badge>
+          </div>
+          <p className="mt-1.5 text-sm text-muted">
+            <span className="font-mono font-semibold text-foreground">
+              {clientCode}
+            </span>{" "}
             {clientName} · {warehouseCode ?? "—"} ·{" "}
             {cargo.receivedAt.toISOString().slice(0, 10)}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span
-            className={`rounded-full px-3 py-1 text-sm ${statusColors[cargo.status] ?? ""}`}
-          >
-            {ts(cargo.status)}
-          </span>
-          <Link
-            href={`/cargo/${cargo.id}/labels`}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            {t("qrLabels")}
-          </Link>
-        </div>
+        <Link
+          href={`/cargo/${cargo.id}/labels`}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-hover"
+        >
+          {icons.qr("h-4.5 w-4.5")}
+          {t("qrLabels")}
+        </Link>
       </div>
 
-      {/* Jami */}
       <div className="grid grid-cols-3 gap-3 sm:max-w-md">
-        <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-700">
-          <div className="text-xl font-bold">{cargo.totalBoxes}</div>
-          <div className="text-xs text-gray-500">{t("boxCount")}</div>
-        </div>
-        <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-700">
-          <div className="text-xl font-bold">{cargo.totalWeightKg}</div>
-          <div className="text-xs text-gray-500">{t("totalWeight")}</div>
-        </div>
-        <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-700">
-          <div className="text-xl font-bold">{cargo.totalVolumeM3}</div>
-          <div className="text-xs text-gray-500">{t("totalVolume")}</div>
-        </div>
+        <StatCard value={cargo.totalBoxes} label={t("boxCount")} />
+        <StatCard value={cargo.totalWeightKg} label={t("totalWeight")} />
+        <StatCard value={cargo.totalVolumeM3} label={t("totalVolume")} />
       </div>
 
-      {/* Qatorlar */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left dark:bg-gray-900">
-            <tr>
-              <th className="px-4 py-2 font-medium">#</th>
-              <th className="px-4 py-2 font-medium">{t("product")}</th>
-              <th className="px-4 py-2 font-medium">{t("boxCount")}</th>
-              <th className="px-4 py-2 font-medium">{t("boxDims")}</th>
-              <th className="px-4 py-2 font-medium">{t("weightPerBox")}</th>
-              <th className="px-4 py-2 font-medium">{t("totalWeight")}</th>
-              <th className="px-4 py-2 font-medium">{t("totalVolume")}</th>
-              <th className="px-4 py-2 font-medium">{t("linePhotos")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr
-                key={l.id}
-                className="border-t border-gray-100 dark:border-gray-800"
-              >
-                <td className="px-4 py-2">{l.lineNo}</td>
-                <td className="px-4 py-2 font-medium">{l.productName}</td>
-                <td className="px-4 py-2">{l.boxCount}</td>
-                <td className="px-4 py-2">
-                  {l.boxLengthCm
-                    ? `${l.boxLengthCm}×${l.boxWidthCm}×${l.boxHeightCm}`
-                    : "—"}
-                </td>
-                <td className="px-4 py-2">{l.weightPerBoxKg ?? "—"}</td>
-                <td className="px-4 py-2">{l.totalWeightKg}</td>
-                <td className="px-4 py-2">{l.totalVolumeM3}</td>
-                <td className="px-4 py-2">
-                  <div className="flex flex-wrap gap-1">
-                    {lineFiles[i]?.map((f) => (
-                      <a
-                        key={f.id}
-                        href={`/api/files/${f.id}`}
-                        target="_blank"
-                        className="block h-10 w-10 overflow-hidden rounded border border-gray-200 dark:border-gray-700"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/api/files/${f.id}`}
-                          alt={f.fileName}
-                          className="h-full w-full object-cover"
-                        />
-                      </a>
-                    ))}
-                    {(!lineFiles[i] || lineFiles[i].length === 0) && "—"}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TableWrap>
+        <thead className="bg-surface-2/60">
+          <tr>
+            <Th>#</Th>
+            <Th>{t("product")}</Th>
+            <Th className="text-right">{t("boxCount")}</Th>
+            <Th>{t("boxDims")}</Th>
+            <Th className="text-right">{t("weightPerBox")}</Th>
+            <Th className="text-right">{t("totalWeight")}</Th>
+            <Th className="text-right">{t("totalVolume")}</Th>
+            <Th>{t("linePhotos")}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, i) => (
+            <TRow key={l.id}>
+              <Td className="text-muted">{l.lineNo}</Td>
+              <Td className="font-medium">{l.productName}</Td>
+              <Td className="text-right font-mono tabular-nums">{l.boxCount}</Td>
+              <Td className="font-mono text-muted tabular-nums">
+                {l.boxLengthCm
+                  ? `${+l.boxLengthCm}×${+l.boxWidthCm!}×${+l.boxHeightCm!}`
+                  : "—"}
+              </Td>
+              <Td className="text-right font-mono tabular-nums">
+                {l.weightPerBoxKg ?? "—"}
+              </Td>
+              <Td className="text-right font-mono tabular-nums">
+                {l.totalWeightKg}
+              </Td>
+              <Td className="text-right font-mono tabular-nums">
+                {l.totalVolumeM3}
+              </Td>
+              <Td>
+                <div className="flex flex-wrap gap-1.5">
+                  {lineFiles[i]?.map((f) => (
+                    <a
+                      key={f.id}
+                      href={`/api/files/${f.id}`}
+                      target="_blank"
+                      className="block h-11 w-11 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/files/${f.id}`}
+                        alt={f.fileName}
+                        className="h-full w-full object-cover"
+                      />
+                    </a>
+                  ))}
+                  {(!lineFiles[i] || lineFiles[i].length === 0) && (
+                    <span className="text-muted">—</span>
+                  )}
+                </div>
+              </Td>
+            </TRow>
+          ))}
+        </tbody>
+      </TableWrap>
 
-      {/* Prixod fayllari */}
-      <div>
-        <h2 className="font-semibold">{t("receiptFiles")}</h2>
+      <Card className="p-4 sm:p-5">
+        <h2 className="text-[11px] font-bold tracking-wider text-muted uppercase">
+          {t("receiptFiles")}
+        </h2>
         {cargoFiles.length === 0 ? (
-          <p className="mt-1 text-sm text-gray-500">—</p>
+          <p className="mt-2 text-sm text-muted">—</p>
         ) : (
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 space-y-1.5">
             {cargoFiles.map((f) => (
-              <li key={f.id}>
+              <li key={f.id} className="flex items-center gap-2">
                 <a
                   href={`/api/files/${f.id}`}
                   target="_blank"
-                  className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                  className="text-sm font-medium text-primary hover:underline"
                 >
                   {f.fileName}
-                </a>{" "}
-                <span className="text-xs text-gray-400">
-                  ({Math.round(f.sizeBytes / 1024)} KB)
+                </a>
+                <span className="text-xs text-muted">
+                  {Math.round(f.sizeBytes / 1024)} KB
                 </span>
               </li>
             ))}
           </ul>
         )}
-      </div>
-
-      {cargo.note && (
-        <p className="text-sm text-gray-500">
-          <span className="font-medium">{t("note")}:</span> {cargo.note}
-        </p>
-      )}
-    </main>
+        {cargo.note && (
+          <p className="mt-3 border-t border-line pt-3 text-sm text-muted">
+            {cargo.note}
+          </p>
+        )}
+      </Card>
+    </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useTranslations } from "next-intl";
+import { Button, Input, Field, Card } from "@/components/ui";
 import { loginAction, type LoginState } from "./actions";
 
 export default function LoginPage() {
@@ -13,47 +14,42 @@ export default function LoginPage() {
   );
 
   return (
-    <main className="flex flex-1 items-center justify-center p-8">
-      <form
-        action={formAction}
-        className="w-full max-w-sm rounded-xl border border-gray-200 p-8 shadow-sm dark:border-gray-700"
-      >
-        <h1 className="text-2xl font-bold">{tc("appName")}</h1>
-        <p className="mt-1 text-sm text-gray-500">{t("title")}</p>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="mb-6 flex items-center gap-2.5">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-lg font-black text-white shadow-sm">
+          G
+        </span>
+        <span className="text-2xl font-bold tracking-tight">
+          {tc("appName")}
+        </span>
+      </div>
 
-        <label className="mt-6 block text-sm font-medium">
-          {t("username")}
-          <input
-            name="username"
-            autoComplete="username"
-            required
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900"
-          />
-        </label>
+      <Card className="w-full max-w-sm p-6 sm:p-8">
+        <h1 className="text-lg font-semibold">{t("title")}</h1>
+        <form action={formAction} className="mt-5 space-y-4">
+          <Field label={t("username")} required>
+            <Input name="username" autoComplete="username" required autoFocus />
+          </Field>
+          <Field label={t("password")} required>
+            <Input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </Field>
 
-        <label className="mt-4 block text-sm font-medium">
-          {t("password")}
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900"
-          />
-        </label>
+          {state.error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+              {t("invalidCredentials")}
+            </p>
+          )}
 
-        {state.error && (
-          <p className="mt-3 text-sm text-red-600">{t("invalidCredentials")}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="mt-6 w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {pending ? tc("loading") : t("signIn")}
-        </button>
-      </form>
+          <Button type="submit" disabled={pending} className="w-full">
+            {pending ? tc("loading") : t("signIn")}
+          </Button>
+        </form>
+      </Card>
     </main>
   );
 }

@@ -22,7 +22,7 @@ export function ToggleActive({
     <button
       onClick={() => startTransition(() => toggleUserActiveAction(id, !isActive))}
       disabled={pending}
-      className="text-xs text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-400"
+      className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
     >
       {isActive ? t("deactivate") : t("activate")}
     </button>

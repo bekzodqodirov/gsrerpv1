@@ -29,11 +29,12 @@ export default async function CargoLabelsPage({
   );
 
   return (
-    <main className="p-8 print:p-0">
-      <div className="mb-4 flex items-center justify-between print:hidden">
-        <h1 className="text-2xl font-bold">
-          {t("qrLabels")} — <span className="font-mono">{data.cargo.regNumber}</span>{" "}
-          <span className="text-gray-500">({boxes.length})</span>
+    <div className="print:p-0">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <h1 className="text-xl font-bold sm:text-2xl">
+          {t("qrLabels")} —{" "}
+          <span className="font-mono">{data.cargo.regNumber}</span>{" "}
+          <span className="font-normal text-muted">({boxes.length})</span>
         </h1>
         <PrintButton label={t("print")} />
       </div>
@@ -42,18 +43,20 @@ export default async function CargoLabelsPage({
         {labels.map((b) => (
           <div
             key={b.qrCode}
-            className="flex flex-col items-center rounded border border-gray-300 p-3 text-center break-inside-avoid dark:border-gray-600 print:border-black"
+            className="flex break-inside-avoid flex-col items-center rounded-xl border border-line bg-white p-3 text-center print:rounded-none print:border-black"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={b.qrDataUrl} alt={b.qrCode} className="h-28 w-28" />
-            <div className="mt-1 font-mono text-sm font-bold">{b.qrCode}</div>
-            <div className="text-xs text-gray-600 dark:text-gray-300 print:text-black">
+            <div className="mt-1 font-mono text-sm font-bold text-black">
+              {b.qrCode}
+            </div>
+            <div className="text-xs text-gray-700">
               <span className="font-semibold">{data.clientCode}</span> ·{" "}
               {b.productName}
             </div>
           </div>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

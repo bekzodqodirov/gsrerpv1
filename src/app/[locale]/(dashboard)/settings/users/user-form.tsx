@@ -2,10 +2,8 @@
 
 import { useActionState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { Button, Input, Select, Field } from "@/components/ui";
 import { createUserAction, type UserFormState } from "./actions";
-
-const inputCls =
-  "mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900";
 
 type RoleOption = { code: string; name: string };
 type WarehouseOption = { id: string; code: string; name: string };
@@ -30,42 +28,31 @@ export function UserForm({
   }, [state.createdUsername]);
 
   return (
-    <form
-      ref={formRef}
-      action={formAction}
-      className="rounded-lg border border-gray-200 p-4 dark:border-gray-700"
-    >
-      <h2 className="font-semibold">{t("newUser")}</h2>
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="block text-sm font-medium">
-          {t("username")} *
-          <input
+    <form ref={formRef} action={formAction}>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Field label={t("username")} required>
+          <Input
             name="username"
             required
             pattern="[a-zA-Z0-9_.\-]{3,64}"
             autoComplete="off"
-            className={inputCls}
+            className="font-mono"
           />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("fullName")} *
-          <input name="fullName" required minLength={2} className={inputCls} />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("password")} *
-          <input
+        </Field>
+        <Field label={t("fullName")} required>
+          <Input name="fullName" required minLength={2} />
+        </Field>
+        <Field label={t("password")} required>
+          <Input
             name="password"
             type="password"
             required
             minLength={6}
             autoComplete="new-password"
-            className={inputCls}
           />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("role")} *
-          <select name="roleCode" required className={inputCls} defaultValue="">
+        </Field>
+        <Field label={t("role")} required>
+          <Select name="roleCode" required defaultValue="">
             <option value="" disabled>
               —
             </option>
@@ -74,39 +61,34 @@ export function UserForm({
                 {r.name}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="block text-sm font-medium">
-          {t("warehouse")}
-          <select name="warehouseId" className={inputCls} defaultValue="">
+          </Select>
+        </Field>
+        <Field label={t("warehouse")}>
+          <Select name="warehouseId" defaultValue="">
             <option value="">{t("noWarehouse")}</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.code} — {w.name}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
       </div>
 
       {state.error && (
-        <p className="mt-3 text-sm text-red-600">
+        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {state.error === "usernameTaken" ? t("usernameTaken") : t("saveError")}
         </p>
       )}
       {state.createdUsername && (
-        <p className="mt-3 text-sm text-green-600">
+        <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
           {t("created", { username: state.createdUsername })}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-      >
+      <Button type="submit" disabled={pending} className="mt-4">
         {pending ? tc("loading") : tc("create")}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -2,10 +2,8 @@
 
 import { useActionState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { Button, Input, Field } from "@/components/ui";
 import { createClientAction, type ClientFormState } from "./actions";
-
-const inputCls =
-  "mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900";
 
 export function ClientForm() {
   const t = useTranslations("clients");
@@ -21,74 +19,57 @@ export function ClientForm() {
   }, [state.createdCode]);
 
   return (
-    <form
-      ref={formRef}
-      action={formAction}
-      className="rounded-lg border border-gray-200 p-4 dark:border-gray-700"
-    >
-      <h2 className="font-semibold">{t("newClient")}</h2>
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="block text-sm font-medium">
-          {t("name")} *
-          <input name="name" required minLength={2} className={inputCls} />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("code")}
-          <input
+    <form ref={formRef} action={formAction}>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Field label={t("name")} required>
+          <Input name="name" required minLength={2} />
+        </Field>
+        <Field label={t("code")}>
+          <Input
             name="code"
             placeholder={t("codeAuto")}
             pattern="[A-Za-z0-9_\-]{2,32}"
-            className={inputCls}
+            className="font-mono"
           />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("phone")}
-          <input name="phone" className={inputCls} />
-        </label>
-        <label className="block text-sm font-medium">
-          Telegram
-          <input name="telegram" className={inputCls} />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("city")}
-          <input name="city" className={inputCls} />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("creditLimit")}
-          <input
+        </Field>
+        <Field label={t("phone")}>
+          <Input name="phone" type="tel" inputMode="tel" />
+        </Field>
+        <Field label="Telegram">
+          <Input name="telegram" />
+        </Field>
+        <Field label={t("city")}>
+          <Input name="city" />
+        </Field>
+        <Field label={t("creditLimit")}>
+          <Input
             name="creditLimitUsd"
             type="number"
             min="0"
             step="0.01"
+            inputMode="decimal"
             placeholder={t("noCredit")}
-            className={inputCls}
           />
-        </label>
-        <label className="block text-sm font-medium">
-          {t("note")}
-          <input name="note" className={inputCls} />
-        </label>
+        </Field>
+        <Field label={t("note")} className="sm:col-span-2 lg:col-span-3">
+          <Input name="note" />
+        </Field>
       </div>
 
       {state.error && (
-        <p className="mt-3 text-sm text-red-600">
+        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           {state.error === "codeTaken" ? t("codeTaken") : t("saveError")}
         </p>
       )}
       {state.createdCode && (
-        <p className="mt-3 text-sm text-green-600">
+        <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
           {t("created", { code: state.createdCode })}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-      >
+      <Button type="submit" disabled={pending} className="mt-4">
         {pending ? tc("loading") : tc("create")}
-      </button>
+      </Button>
     </form>
   );
 }
