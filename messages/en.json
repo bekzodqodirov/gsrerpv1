@@ -1,0 +1,27 @@
+{
+  "common": {
+    "appName": "GSR ERP",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "actions": "Actions",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "inventory": "Inventory",
+    "sales": "Sales",
+    "finance": "Finance",
+    "hr": "HR",
+    "settings": "Settings"
+  },
+  "home": {
+    "title": "GSR ERP System",
+    "subtitle": "Enterprise management: inventory, sales, finance and HR — all in one place"
+  }
+}

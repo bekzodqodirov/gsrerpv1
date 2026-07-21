@@ -1,0 +1,27 @@
+{
+  "common": {
+    "appName": "GSR ERP",
+    "loading": "Yuklanmoqda...",
+    "save": "Saqlash",
+    "cancel": "Bekor qilish",
+    "delete": "O'chirish",
+    "edit": "Tahrirlash",
+    "create": "Yaratish",
+    "search": "Qidirish",
+    "actions": "Amallar",
+    "yes": "Ha",
+    "no": "Yo'q"
+  },
+  "nav": {
+    "dashboard": "Bosh sahifa",
+    "inventory": "Ombor",
+    "sales": "Savdo",
+    "finance": "Moliya",
+    "hr": "Xodimlar",
+    "settings": "Sozlamalar"
+  },
+  "home": {
+    "title": "GSR ERP tizimi",
+    "subtitle": "Korxona boshqaruvi: ombor, savdo, moliya va xodimlar — bir joyda"
+  }
+}

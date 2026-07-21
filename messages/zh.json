@@ -1,0 +1,27 @@
+{
+  "common": {
+    "appName": "GSR ERP",
+    "loading": "加载中...",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "search": "搜索",
+    "actions": "操作",
+    "yes": "是",
+    "no": "否"
+  },
+  "nav": {
+    "dashboard": "首页",
+    "inventory": "仓库",
+    "sales": "销售",
+    "finance": "财务",
+    "hr": "人事",
+    "settings": "设置"
+  },
+  "home": {
+    "title": "GSR ERP 系统",
+    "subtitle": "企业管理：仓库、销售、财务与人事 — 一站式平台"
+  }
+}
