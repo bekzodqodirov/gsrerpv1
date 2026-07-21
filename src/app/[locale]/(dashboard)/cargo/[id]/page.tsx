@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { getCargo, getCargoBoxes } from "@/modules/cargo/service";
+import { getCargo } from "@/modules/cargo/service";
 import { getSession } from "@/modules/shared/auth";
 import { listAttachments } from "@/modules/shared/attachments";
 import { statusColors } from "@/components/cargo-status";
@@ -27,28 +27,18 @@ export default async function CargoDetailPage({
 
   const data = await getCargo(id);
   if (!data) notFound();
-  const { cargo, clientCode, clientName, warehouseCode, lines } = data;
+  const { cargo, clientCode, clientName, warehouseCode, warehouseGsCode, lines } =
+    data;
 
   const session = await getSession();
   const canEdit =
     (session?.perms.includes("*") || session?.perms.includes("cargo.receive")) &&
     cargo.status === "received_cn";
 
-  const [cargoFiles, boxes, ...lineFiles] = await Promise.all([
+  const [cargoFiles, ...lineFiles] = await Promise.all([
     listAttachments("cargo", cargo.id),
-    getCargoBoxes(cargo.id),
     ...lines.map((l) => listAttachments("cargo_line", l.id)),
   ]);
-
-  const qrRangeByLine = new Map<string, { first: string; lastLetter: string }>();
-  for (const b of boxes) {
-    const existing = qrRangeByLine.get(b.lineId);
-    if (!existing) {
-      qrRangeByLine.set(b.lineId, { first: b.qrCode, lastLetter: b.letterCode });
-    } else {
-      existing.lastLetter = b.letterCode;
-    }
-  }
 
   return (
     <div className="space-y-5">
@@ -112,7 +102,7 @@ export default async function CargoDetailPage({
         </thead>
         <tbody>
           {lines.map((l, i) => {
-            const qr = qrRangeByLine.get(l.id);
+            const qrCode = `${warehouseGsCode ?? "?"}-${clientCode}-${l.letterCode}`;
             return (
             <TRow key={l.id}>
               <Td className="text-muted">{l.lineNo}</Td>
@@ -133,11 +123,7 @@ export default async function CargoDetailPage({
                 {l.totalVolumeM3}
               </Td>
               <Td className="font-mono text-xs whitespace-nowrap text-muted">
-                {qr
-                  ? l.boxCount > 1
-                    ? `${qr.first} … ${qr.lastLetter}`
-                    : qr.first
-                  : "—"}
+                {qrCode}
               </Td>
               <Td>
                 <div className="flex flex-wrap gap-1.5">

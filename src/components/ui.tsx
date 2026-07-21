@@ -56,9 +56,25 @@ export const controlCls =
 
 export function Input({
   className,
+  onWheel,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(controlCls, className)} {...props} />;
+  return (
+    <input
+      className={cn(controlCls, className)}
+      // Raqam maydonida sichqoncha g'ildiragi qiymatni o'zgartirib
+      // yubormasin — fokusni olib tashlab, oddiy sahifa aylantirishga qaytaramiz.
+      onWheel={
+        props.type === "number"
+          ? (e) => {
+              e.currentTarget.blur();
+              onWheel?.(e);
+            }
+          : onWheel
+      }
+      {...props}
+    />
+  );
 }
 
 export function Select({

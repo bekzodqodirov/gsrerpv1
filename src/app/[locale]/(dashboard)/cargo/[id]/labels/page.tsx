@@ -42,7 +42,7 @@ export default async function CargoLabelsPage({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-3 print:gap-2">
         {labels.map((b) => (
           <div
-            key={b.qrCode}
+            key={`${b.lineId}-${b.boxNo}`}
             className="flex break-inside-avoid flex-col items-center rounded-xl border border-line bg-white p-3 text-center print:rounded-none print:border-black"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -57,7 +57,7 @@ export default async function CargoLabelsPage({
             </div>
             <div className="text-[11px] text-gray-500">
               {data.cargo.receivedAt.toISOString().slice(0, 10)} ·{" "}
-              {b.boxNo}/{boxes.length}
+              {b.position}/{b.boxCount}
             </div>
           </div>
         ))}

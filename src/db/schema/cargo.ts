@@ -108,6 +108,10 @@ export const cargoLines = pgTable(
       .notNull()
       .references(() => cargos.id),
     lineNo: integer("line_no").notNull(), // 1, 2, 3...
+    // Shu tovar turining prixod ichidagi harf kodi: A, B, ... Z, AA, ... ZZ,
+    // so'ng yana A ga qaytadi. Bir xil tovarning BARCHA karobkalari shu bir
+    // xil harfni oladi (masalan 50 ta "oyinchoq" karobkasi — hammasi "A").
+    letterCode: varchar("letter_code", { length: 4 }).notNull(),
     productName: varchar("product_name", { length: 255 }).notNull(),
 
     boxCount: integer("box_count").notNull(),
@@ -164,10 +168,10 @@ export const cargoBoxes = pgTable(
       .notNull()
       .references(() => cargoLines.id),
     boxNo: integer("box_no").notNull(), // prixod ichida 1..N (ketma-ket, chiziqlar bo'yicha)
-    // Prixod ichidagi harf kodi: A, B, ... Z, AA, ... ZZ, so'ng yana A ga qaytadi.
-    letterCode: varchar("letter_code", { length: 4 }).notNull(),
-    // Yorliq/QR matni: GS1-GSR0002-A — global unique EMAS (harf kodi davriy
-    // takrorlanadi), tashqi ko'rinish uchun. Haqiqiy unique kalit — id.
+    // Yorliq/QR matni: GS1-GSR0002-A — o'z qatoridagi BARCHA karobkalar bilan
+    // bir xil (harf tovar darajasida beriladi). Global unique EMAS — haqiqiy
+    // unique kalit id. Karobkaning "nechinchi"ligi shu qatordagi tartibi
+    // (boxNo'dan hisoblanadi), alohida ustun sifatida saqlanmaydi.
     qrCode: varchar("qr_code", { length: 64 }).notNull(),
     // Qayta upakovkada paddonga biriktiriladi:
     palletId: uuid("pallet_id").references(() => pallets.id),

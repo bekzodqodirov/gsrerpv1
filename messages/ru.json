@@ -78,7 +78,11 @@
     "cargoLocked": "Этот приход уже в движении — редактирование недоступно.",
     "confirmTitle": "Подтвердите данные",
     "confirmCancel": "Отмена",
-    "confirmSubmit": "Подтвердить"
+    "confirmSubmit": "Подтвердить",
+    "searchClient": "Введите код или название клиента...",
+    "noClients": "Клиенты не найдены",
+    "clientRequired": "Выберите клиента",
+    "sameCodeNote": "Все коробки этого товара имеют этот же код"
   },
   "cargoStatus": {
     "received_cn": "Принят в Китае",

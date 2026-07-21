@@ -78,7 +78,11 @@
     "cargoLocked": "该批次已进入下一环节，无法再编辑。",
     "confirmTitle": "请确认信息",
     "confirmCancel": "取消",
-    "confirmSubmit": "确认"
+    "confirmSubmit": "确认",
+    "searchClient": "输入客户编码或姓名...",
+    "noClients": "未找到客户",
+    "clientRequired": "请选择客户",
+    "sameCodeNote": "该商品的所有箱子共用此编码"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",

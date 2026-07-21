@@ -46,8 +46,8 @@ async function resolveReceiveContext(
 
 /**
  * Yuk qabul qilish (Xitoy skladida).
- * Har xil tovar — alohida qator; har karobkaga yorliq kodi:
- * GS1-GSR0002-A, -B, -C... (sklad GS-kodi, mijoz kodi, davriy harf).
+ * Har xil tovar — alohida qator, o'z harf kodi bilan: A, B, C... Shu tovarning
+ * BARCHA karobkalari bir xil kodni oladi: GS1-GSR0002-A (sklad, mijoz, harf).
  */
 export async function receiveCargo(input: ReceiveCargoInput) {
   const session = await requirePermission("cargo.receive");
@@ -192,11 +192,17 @@ async function insertLinesAndBoxes(
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     const totals = lineTotals[i];
+    // Harf — tovar (qator) darajasida: shu tovarning barcha karobkalari
+    // bir xil harfni oladi.
+    const letterCode = letterCodeForIndex(i);
+    const qrCode = buildBoxCode(gsCode, clientCode, letterCode);
+
     const [line] = await tx
       .insert(cargoLines)
       .values({
         cargoId,
         lineNo: i + 1,
+        letterCode,
         productName: l.productName,
         boxCount: l.boxCount,
         boxLengthCm: l.boxLengthCm != null ? String(l.boxLengthCm) : null,
@@ -211,15 +217,8 @@ async function insertLinesAndBoxes(
       .returning();
 
     const boxRows = Array.from({ length: l.boxCount }, () => {
-      const letter = letterCodeForIndex(boxNo);
       boxNo += 1;
-      return {
-        cargoId,
-        lineId: line.id,
-        boxNo,
-        letterCode: letter,
-        qrCode: buildBoxCode(gsCode, clientCode, letter),
-      };
+      return { cargoId, lineId: line.id, boxNo, qrCode };
     });
     for (let j = 0; j < boxRows.length; j += 500) {
       await tx.insert(cargoBoxes).values(boxRows.slice(j, j + 500));
@@ -229,8 +228,8 @@ async function insertLinesAndBoxes(
 
 /**
  * Yuklar ro'yxati: sklad xodimiga faqat o'z skladi ko'rinadi.
- * Har prixodga qatorlari (kengaytiriladigan qator uchun) va umumiy
- * rasmi (agar biriktirilgan bo'lsa) qo'shib qaytariladi.
+ * Har prixodga qatorlari (kengaytiriladigan qator uchun), qator rasmi va
+ * umumiy prixod rasmi (agar biriktirilgan bo'lsa) qo'shib qaytariladi.
  */
 export async function listCargos(filter: CargoListFilter = {}) {
   const session = await requirePermission("cargo.view");
@@ -265,6 +264,7 @@ export async function listCargos(filter: CargoListFilter = {}) {
       clientCode: clients.code,
       clientName: clients.name,
       warehouseCode: warehouses.code,
+      warehouseGsCode: warehouses.gsCode,
     })
     .from(cargos)
     .innerJoin(clients, eq(cargos.clientId, clients.id))
@@ -274,15 +274,20 @@ export async function listCargos(filter: CargoListFilter = {}) {
     .limit(200);
 
   const cargoIds = rows.map((r) => r.id);
-  const [lineRows, photoRows] = await Promise.all([
+  const [lineRows, cargoFileRows] = await Promise.all([
     cargoIds.length
       ? db
           .select({
             cargoId: cargoLines.cargoId,
             id: cargoLines.id,
             lineNo: cargoLines.lineNo,
+            letterCode: cargoLines.letterCode,
             productName: cargoLines.productName,
             boxCount: cargoLines.boxCount,
+            boxLengthCm: cargoLines.boxLengthCm,
+            boxWidthCm: cargoLines.boxWidthCm,
+            boxHeightCm: cargoLines.boxHeightCm,
+            weightPerBoxKg: cargoLines.weightPerBoxKg,
             totalWeightKg: cargoLines.totalWeightKg,
             totalVolumeM3: cargoLines.totalVolumeM3,
           })
@@ -295,7 +300,9 @@ export async function listCargos(filter: CargoListFilter = {}) {
           .select({
             entityId: attachments.entityId,
             id: attachments.id,
+            fileName: attachments.fileName,
             mimeType: attachments.mimeType,
+            sizeBytes: attachments.sizeBytes,
           })
           .from(attachments)
           .where(
@@ -308,23 +315,60 @@ export async function listCargos(filter: CargoListFilter = {}) {
       : [],
   ]);
 
-  const linesByCargo = new Map<string, typeof lineRows>();
+  // Har qatorning birinchi rasmi — bitta so'rovda (N+1'dan qochish)
+  const lineIds = lineRows.map((l) => l.id);
+  const linePhotoRows = lineIds.length
+    ? await db
+        .select({
+          entityId: attachments.entityId,
+          id: attachments.id,
+          mimeType: attachments.mimeType,
+        })
+        .from(attachments)
+        .where(
+          and(
+            eq(attachments.entity, "cargo_line"),
+            inArray(attachments.entityId, lineIds),
+          ),
+        )
+        .orderBy(asc(attachments.createdAt))
+    : [];
+  const photoByLine = new Map<string, string>();
+  for (const p of linePhotoRows) {
+    if (p.mimeType.startsWith("image/") && !photoByLine.has(p.entityId)) {
+      photoByLine.set(p.entityId, p.id);
+    }
+  }
+
+  const linesByCargo = new Map<
+    string,
+    Array<(typeof lineRows)[number] & { photoId: string | null }>
+  >();
   for (const l of lineRows) {
     const arr = linesByCargo.get(l.cargoId) ?? [];
-    arr.push(l);
+    arr.push({ ...l, photoId: photoByLine.get(l.id) ?? null });
     linesByCargo.set(l.cargoId, arr);
   }
-  const photoByCargo = new Map<string, string>();
-  for (const p of photoRows) {
-    if (p.mimeType.startsWith("image/") && !photoByCargo.has(p.entityId)) {
-      photoByCargo.set(p.entityId, p.id);
+
+  const filesByCargo = new Map<
+    string,
+    Array<{ id: string; fileName: string; sizeBytes: number }>
+  >();
+  const firstPhotoByCargo = new Map<string, string>();
+  for (const f of cargoFileRows) {
+    const arr = filesByCargo.get(f.entityId) ?? [];
+    arr.push({ id: f.id, fileName: f.fileName, sizeBytes: f.sizeBytes });
+    filesByCargo.set(f.entityId, arr);
+    if (f.mimeType.startsWith("image/") && !firstPhotoByCargo.has(f.entityId)) {
+      firstPhotoByCargo.set(f.entityId, f.id);
     }
   }
 
   return rows.map((r) => ({
     ...r,
     lines: linesByCargo.get(r.id) ?? [],
-    photoId: photoByCargo.get(r.id) ?? null,
+    photoId: firstPhotoByCargo.get(r.id) ?? null,
+    files: filesByCargo.get(r.id) ?? [],
   }));
 }
 
@@ -339,6 +383,7 @@ export async function getCargo(id: string) {
       clientName: clients.name,
       warehouseCode: warehouses.code,
       warehouseName: warehouses.name,
+      warehouseGsCode: warehouses.gsCode,
     })
     .from(cargos)
     .innerJoin(clients, eq(cargos.clientId, clients.id))
@@ -362,118 +407,47 @@ export async function getCargo(id: string) {
   return { ...row, lines };
 }
 
-/**
- * Tovarlar ro'yxati (qatorlar), prixod bo'yicha guruhlash uchun mo'ljallangan:
- * bir xil regNumber ostidagi qatorlar ketma-ket keladi, har biriga birinchi
- * rasm va QR kod diapazoni (birinchi..oxirgi harf) biriktirib qaytariladi.
- */
-export async function listCargoLines(filter: CargoListFilter = {}) {
-  const session = await requirePermission("cargo.view");
-
-  const conds = [eq(cargos.voided, false)];
-  if (session.warehouseId) {
-    conds.push(eq(cargos.currentWarehouseId, session.warehouseId));
-  }
-  if (filter.status) {
-    conds.push(eq(cargos.status, filter.status));
-  }
-  if (filter.q) {
-    const q = `%${filter.q}%`;
-    conds.push(
-      or(
-        ilike(cargos.regNumber, q),
-        ilike(clients.code, q),
-        ilike(clients.name, q),
-        ilike(cargoLines.productName, q),
-      )!,
-    );
-  }
-
-  const rows = await db
-    .select({
-      cargoId: cargos.id,
-      regNumber: cargos.regNumber,
-      status: cargos.status,
-      receivedAt: cargos.receivedAt,
-      clientCode: clients.code,
-      clientName: clients.name,
-      lineId: cargoLines.id,
-      lineNo: cargoLines.lineNo,
-      productName: cargoLines.productName,
-      boxCount: cargoLines.boxCount,
-      totalWeightKg: cargoLines.totalWeightKg,
-      totalVolumeM3: cargoLines.totalVolumeM3,
-    })
-    .from(cargoLines)
-    .innerJoin(cargos, eq(cargoLines.cargoId, cargos.id))
-    .innerJoin(clients, eq(cargos.clientId, clients.id))
-    .where(and(...conds))
-    .orderBy(desc(cargos.createdAt), asc(cargoLines.lineNo))
-    .limit(500);
-
-  const lineIds = rows.map((r) => r.lineId);
-  const [photoRows, boxRows] = await Promise.all([
-    lineIds.length
-      ? db
-          .select({ entityId: attachments.entityId, id: attachments.id })
-          .from(attachments)
-          .where(
-            and(
-              eq(attachments.entity, "cargo_line"),
-              inArray(attachments.entityId, lineIds),
-            ),
-          )
-          .orderBy(asc(attachments.createdAt))
-      : [],
-    lineIds.length
-      ? db
-          .select({
-            lineId: cargoBoxes.lineId,
-            boxNo: cargoBoxes.boxNo,
-            qrCode: cargoBoxes.qrCode,
-          })
-          .from(cargoBoxes)
-          .where(inArray(cargoBoxes.lineId, lineIds))
-          .orderBy(asc(cargoBoxes.boxNo))
-      : [],
-  ]);
-
-  const firstPhotoByLine = new Map<string, string>();
-  for (const p of photoRows) {
-    if (!firstPhotoByLine.has(p.entityId)) {
-      firstPhotoByLine.set(p.entityId, p.id);
-    }
-  }
-  const firstQrByLine = new Map<string, string>();
-  const lastQrByLine = new Map<string, string>();
-  for (const b of boxRows) {
-    if (!firstQrByLine.has(b.lineId)) firstQrByLine.set(b.lineId, b.qrCode);
-    lastQrByLine.set(b.lineId, b.qrCode);
-  }
-
-  return rows.map((r) => ({
-    ...r,
-    photoId: firstPhotoByLine.get(r.lineId) ?? null,
-    qrFirst: firstQrByLine.get(r.lineId) ?? null,
-    qrLast: lastQrByLine.get(r.lineId) ?? null,
-  }));
+/** Bitta tovar (qator) uchun QR — "QR ko'rish" popover uchun. */
+export async function getLineQr(lineId: string) {
+  await requirePermission("cargo.view");
+  const line = await db.query.cargoLines.findFirst({
+    where: eq(cargoLines.id, lineId),
+  });
+  if (!line) return null;
+  const box = await db.query.cargoBoxes.findFirst({
+    where: eq(cargoBoxes.lineId, lineId),
+  });
+  return {
+    qrCode: box?.qrCode ?? null,
+    letterCode: line.letterCode,
+    boxCount: line.boxCount,
+  };
 }
 
 /** QR yorliqlar uchun: prixodning barcha karobkalari, to'liq ma'lumot bilan. */
 export async function getCargoBoxes(cargoId: string) {
   await requirePermission("cargo.view");
-  return db
+  const boxes = await db
     .select({
       lineId: cargoBoxes.lineId,
       boxNo: cargoBoxes.boxNo,
-      letterCode: cargoBoxes.letterCode,
       qrCode: cargoBoxes.qrCode,
+      letterCode: cargoLines.letterCode,
       productName: cargoLines.productName,
+      boxCount: cargoLines.boxCount,
     })
     .from(cargoBoxes)
     .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
     .where(eq(cargoBoxes.cargoId, cargoId))
     .orderBy(asc(cargoBoxes.boxNo));
+
+  // Har karobkaning o'z qatori ichidagi tartib raqami: "nechinchi/nechtadan"
+  const seenInLine = new Map<string, number>();
+  return boxes.map((b) => {
+    const position = (seenInLine.get(b.lineId) ?? 0) + 1;
+    seenInLine.set(b.lineId, position);
+    return { ...b, position };
+  });
 }
 
 /** Forma uchun: faol mijozlar va qabul qiluvchi skladlar. */

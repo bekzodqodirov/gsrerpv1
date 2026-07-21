@@ -6,15 +6,24 @@ import { Link } from "@/i18n/routing";
 import { TableWrap, Th, Td, TRow, EmptyRow, Badge } from "@/components/ui";
 import { icons } from "@/components/icons";
 import { statusColors } from "@/components/cargo-status";
+import { getLineQrPreviewAction } from "./qr-preview-action";
 
 type Line = {
   id: string;
   lineNo: number;
+  letterCode: string;
   productName: string;
   boxCount: number;
+  boxLengthCm: string | null;
+  boxWidthCm: string | null;
+  boxHeightCm: string | null;
+  weightPerBoxKg: string | null;
   totalWeightKg: string;
   totalVolumeM3: string;
+  photoId: string | null;
 };
+
+type CargoFile = { id: string; fileName: string; sizeBytes: number };
 
 type Row = {
   id: string;
@@ -26,9 +35,111 @@ type Row = {
   clientCode: string;
   clientName: string;
   warehouseCode: string | null;
+  warehouseGsCode: string | null;
   photoId: string | null;
+  files: CargoFile[];
   lines: Line[];
 };
+
+/** Bitta tovar (qator)ning QR kodini ko'rsatadigan popover — shu tovarning
+ * barcha karobkalari bir xil kodga ega bo'lgani uchun bitta rasm yetarli. */
+function LineQrButton({
+  lineId,
+  code,
+}: {
+  lineId: string;
+  code: string;
+}) {
+  const t = useTranslations("cargo");
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  async function handleOpen() {
+    setOpen(true);
+    if (dataUrl) return;
+    setLoading(true);
+    const result = await getLineQrPreviewAction(lineId);
+    setDataUrl(result?.dataUrl ?? null);
+    setLoading(false);
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 font-mono text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        {icons.qr("h-3.5 w-3.5")}
+        {code}
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full max-w-xs rounded-xl border border-line bg-surface p-5 text-center shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-mono text-sm font-bold">{code}</h3>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface-2"
+              >
+                {icons.close("h-4 w-4")}
+              </button>
+            </div>
+
+            {loading && <p className="py-10 text-sm text-muted">…</p>}
+            {dataUrl && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={dataUrl} alt={code} className="mx-auto h-40 w-40" />
+                <p className="mt-2 text-xs text-muted">{t("sameCodeNote")}</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function FileList({ files }: { files: CargoFile[] }) {
+  const t = useTranslations("cargo");
+  if (files.length === 0) return null;
+  return (
+    <div className="border-t border-line px-3 py-2">
+      <span className="text-[11px] font-bold tracking-wider text-muted uppercase">
+        {t("receiptFiles")} ({files.length})
+      </span>
+      <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+        {files.map((f) => (
+          <li key={f.id}>
+            <a
+              href={`/api/files/${f.id}`}
+              target="_blank"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              {f.fileName}
+            </a>{" "}
+            <span className="text-xs text-muted">
+              ({Math.round(f.sizeBytes / 1024)} KB)
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
   const t = useTranslations("cargo");
@@ -56,14 +167,15 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
           const isOpen = openId === c.id;
           return (
             <Fragment key={c.id}>
-              <TRow>
+              <TRow
+                className="cursor-pointer"
+                onClick={() => setOpenId(isOpen ? null : c.id)}
+              >
                 <Td className="w-8">
                   {c.lines.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setOpenId(isOpen ? null : c.id)}
+                    <span
                       aria-label={t("toggleLines")}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-muted"
                     >
                       <svg
                         viewBox="0 0 16 16"
@@ -76,7 +188,7 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
                       >
                         <path d="M6 4l4 4-4 4" />
                       </svg>
-                    </button>
+                    </span>
                   )}
                 </Td>
                 <Td>
@@ -84,6 +196,7 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
                     <a
                       href={`/api/files/${c.photoId}`}
                       target="_blank"
+                      onClick={(e) => e.stopPropagation()}
                       className="block h-9 w-9 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -102,6 +215,7 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
                 <Td>
                   <Link
                     href={`/cargo/${c.id}`}
+                    onClick={(e) => e.stopPropagation()}
                     className="font-mono font-semibold text-primary hover:underline"
                   >
                     {c.regNumber}
@@ -133,23 +247,85 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
               </TRow>
               {isOpen && (
                 <tr className="border-t border-line bg-surface-2/40">
-                  <td colSpan={9} className="px-4 py-3">
-                    <div className="space-y-1">
-                      {c.lines.map((l) => (
-                        <div
-                          key={l.id}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <span className="font-medium">
-                            {l.lineNo}. {l.productName}
-                          </span>
-                          <span className="font-mono text-xs text-muted tabular-nums">
-                            {l.boxCount} · {l.totalWeightKg} kg ·{" "}
-                            {l.totalVolumeM3} m³
-                          </span>
-                        </div>
-                      ))}
+                  <td colSpan={9} className="p-0">
+                    <div className="overflow-x-auto p-3">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-[11px] font-semibold tracking-wider text-muted uppercase">
+                            <th className="px-2 py-1.5">{t("photo")}</th>
+                            <th className="px-2 py-1.5">{t("product")}</th>
+                            <th className="px-2 py-1.5 text-right">
+                              {t("boxCount")}
+                            </th>
+                            <th className="px-2 py-1.5">{t("boxDims")}</th>
+                            <th className="px-2 py-1.5 text-right">
+                              {t("weightPerBox")}
+                            </th>
+                            <th className="px-2 py-1.5 text-right">
+                              {t("totalWeight")}
+                            </th>
+                            <th className="px-2 py-1.5 text-right">
+                              {t("totalVolume")}
+                            </th>
+                            <th className="px-2 py-1.5">{t("qrCode")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {c.lines.map((l) => {
+                            const code = `${c.warehouseGsCode ?? "?"}-${c.clientCode}-${l.letterCode}`;
+                            return (
+                              <tr key={l.id} className="border-t border-line/60">
+                                <td className="px-2 py-1.5">
+                                  {l.photoId ? (
+                                    <a
+                                      href={`/api/files/${l.photoId}`}
+                                      target="_blank"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="block h-10 w-10 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
+                                    >
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={`/api/files/${l.photoId}`}
+                                        alt={l.productName}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    </a>
+                                  ) : (
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted">
+                                      {icons.camera("h-4 w-4")}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 font-medium">
+                                  {l.productName}
+                                </td>
+                                <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                                  {l.boxCount}
+                                </td>
+                                <td className="px-2 py-1.5 font-mono text-muted tabular-nums">
+                                  {l.boxLengthCm
+                                    ? `${+l.boxLengthCm}×${+l.boxWidthCm!}×${+l.boxHeightCm!}`
+                                    : "—"}
+                                </td>
+                                <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                                  {l.weightPerBoxKg ?? "—"}
+                                </td>
+                                <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                                  {l.totalWeightKg}
+                                </td>
+                                <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                                  {l.totalVolumeM3}
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <LineQrButton lineId={l.id} code={code} />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
+                    <FileList files={c.files} />
                   </td>
                 </tr>
               )}

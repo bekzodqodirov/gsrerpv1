@@ -1,5 +1,5 @@
 {
-  "id": "e808c9aa-b65f-490b-9d72-6ddfde1c860a",
+  "id": "48ccbdc8-a194-4349-bca6-3384833422c4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -893,12 +893,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "letter_code": {
-          "name": "letter_code",
-          "type": "varchar(4)",
-          "primaryKey": false,
-          "notNull": true
-        },
         "qr_code": {
           "name": "qr_code",
           "type": "varchar(64)",
@@ -1153,6 +1147,12 @@
         "line_no": {
           "name": "line_no",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "letter_code": {
+          "name": "letter_code",
+          "type": "varchar(4)",
           "primaryKey": false,
           "notNull": true
         },

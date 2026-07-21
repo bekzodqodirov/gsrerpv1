@@ -78,7 +78,11 @@
     "cargoLocked": "This receipt has already moved on — it can no longer be edited.",
     "confirmTitle": "Confirm the details",
     "confirmCancel": "Cancel",
-    "confirmSubmit": "Confirm"
+    "confirmSubmit": "Confirm",
+    "searchClient": "Type client code or name...",
+    "noClients": "No clients found",
+    "clientRequired": "Please select a client",
+    "sameCodeNote": "All boxes of this product share this same code"
   },
   "cargoStatus": {
     "received_cn": "Received in China",
