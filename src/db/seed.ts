@@ -14,11 +14,13 @@ import {
   warehouses,
   currencies,
   docSequences,
+  carriers,
 } from "./schema";
 
 const ROLES = [
   { code: "admin", name: "Administrator" },
   { code: "omborchi", name: "Omborchi" },
+  { code: "logist", name: "Logist" },
   { code: "sotuvchi", name: "Sotuvchi" },
   { code: "buxgalter", name: "Buxgalter" },
   { code: "hr", name: "HR menejer" },
@@ -36,6 +38,9 @@ const PERMISSIONS = [
   { code: "cargo.view", description: "Yuklarni ko'rish" },
   { code: "cargo.receive", description: "Yuk qabul qilish" },
   { code: "cargo.move", description: "Yuk holatini o'zgartirish" },
+  { code: "tms.view", description: "Partiya/mashinalarni ko'rish" },
+  { code: "tms.manage", description: "Partiya/mashina va narxlarni boshqarish" },
+  { code: "tms.load", description: "Mashinaga yuklash/tushirishni tasdiqlash" },
 ] as const;
 
 // Skladlar: 4 Xitoy (arenda) + 2 O'zbekiston customs warehouse (namuna)
@@ -121,19 +126,40 @@ async function main() {
     .values({ userId: admin.id, roleId: adminRole.id })
     .onConflictDoNothing();
 
-  // Omborchi roli: yuk qabul/ko'rish/harakat + mijozlarni ko'rish
-  const omborchiRole = (await db.query.roles.findFirst({
-    where: eq(roles.code, "omborchi"),
-  }))!;
-  for (const permCode of ["cargo.view", "cargo.receive", "cargo.move", "clients.view"]) {
-    const perm = await db.query.permissions.findFirst({
-      where: eq(permissions.code, permCode),
-    });
-    if (perm) {
-      await db
-        .insert(rolePermissions)
-        .values({ roleId: omborchiRole.id, permissionId: perm.id })
-        .onConflictDoNothing();
+  // Rol → huquqlar biriktirish (admin "*" orqali hammasini oladi).
+  const roleGrants: Record<string, string[]> = {
+    // Sklad xodimi: yuk qabul + mashinaga yuklash/tushirish (narxni KO'RMAYDI)
+    omborchi: [
+      "cargo.view",
+      "cargo.receive",
+      "cargo.move",
+      "clients.view",
+      "tms.view",
+      "tms.load",
+    ],
+    // Logist: barcha ombor qoldig'i, partiya/mashina va narxlarni boshqaradi
+    logist: [
+      "cargo.view",
+      "cargo.move",
+      "clients.view",
+      "tms.view",
+      "tms.manage",
+      "tms.load",
+    ],
+  };
+  for (const [roleCode, perms] of Object.entries(roleGrants)) {
+    const role = await db.query.roles.findFirst({ where: eq(roles.code, roleCode) });
+    if (!role) continue;
+    for (const permCode of perms) {
+      const perm = await db.query.permissions.findFirst({
+        where: eq(permissions.code, permCode),
+      });
+      if (perm) {
+        await db
+          .insert(rolePermissions)
+          .values({ roleId: role.id, permissionId: perm.id })
+          .onConflictDoNothing();
+      }
     }
   }
 
@@ -157,6 +183,22 @@ async function main() {
   // Raqamlagichlar
   for (const s of SEQUENCES) {
     await db.insert(docSequences).values(s).onConflictDoNothing();
+  }
+
+  // Namuna yollanma mashinalar (bozordan yollanadigan)
+  const CARRIERS = [
+    { name: "Chen Wei", phone: "+86 138 0011 2233", truckPlate: "浙G·88888", truckType: "Tent 40t", capacityKg: "28000", capacityM3: "82" },
+    { name: "Aziz Karimov", phone: "+998 90 123 45 67", truckPlate: "01 A 777 BC", truckType: "Refrijerator", capacityKg: "20000", capacityM3: "60" },
+    { name: "Li Ming Logistics", phone: "+86 139 5566 7788", truckPlate: "新A·66666", truckType: "Tent 20t", capacityKg: "15000", capacityM3: "45" },
+  ];
+  for (const c of CARRIERS) {
+    const exists = await db.query.carriers.findFirst({
+      where: eq(carriers.name, c.name),
+    });
+    if (!exists) {
+      await db.insert(carriers).values(c);
+      console.log(`+ mashina: ${c.name}`);
+    }
   }
 
   console.log("Seed tugadi.");

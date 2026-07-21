@@ -48,6 +48,14 @@ export const icons = {
       <rect x="13" y="12" width="4" height="4" />
     </Icon>
   ),
+  truck: (c?: string) => (
+    <Icon className={c}>
+      <path d="M2 5h11v11H2z" />
+      <path d="M13 8h4l4 4v4h-8V8z" />
+      <circle cx="6.5" cy="18" r="1.8" />
+      <circle cx="17.5" cy="18" r="1.8" />
+    </Icon>
+  ),
   clients: (c?: string) => (
     <Icon className={c}>
       <circle cx="9" cy="8" r="3.5" />

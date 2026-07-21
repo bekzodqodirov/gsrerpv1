@@ -10,3 +10,4 @@
 export * from "./system";
 export * from "./catalog";
 export * from "./cargo";
+export * from "./trips";
