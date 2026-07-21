@@ -11,10 +11,12 @@ import {
   voidInvoice,
   recordPayment,
 } from "@/modules/finance/billing";
+import { createExpense } from "@/modules/finance/expenses";
 import {
   exchangeRateSchema,
   clientTariffSchema,
   paymentSchema,
+  expenseSchema,
 } from "@/modules/finance/dto";
 
 export type FinanceFormState = { error?: string; ok?: boolean };
@@ -128,6 +130,34 @@ export async function recordPaymentAction(
     const msg = e instanceof Error ? e.message : "";
     if (msg.startsWith("NO_FX_RATE")) return { error: "noFxRate" };
     console.error("[finance] payment:", e);
+    return { error: "server" };
+  }
+}
+
+export async function createExpenseAction(
+  _prev: FinanceFormState,
+  formData: FormData,
+): Promise<FinanceFormState> {
+  const str = (k: string) => String(formData.get(k) ?? "");
+  const parsed = expenseSchema.safeParse({
+    category: str("category"),
+    amount: str("amount"),
+    currency: str("currency"),
+    spentAt: str("spentAt"),
+    batchId: str("batchId"),
+    warehouseId: str("warehouseId"),
+    carrierId: str("carrierId"),
+    note: str("note"),
+  });
+  if (!parsed.success) return { error: "validation" };
+  try {
+    await createExpense(parsed.data);
+    revalidatePath("/[locale]/finance/expenses", "page");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.startsWith("NO_FX_RATE")) return { error: "noFxRate" };
+    console.error("[finance] expense:", e);
     return { error: "server" };
   }
 }

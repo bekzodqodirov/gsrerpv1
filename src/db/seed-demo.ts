@@ -14,6 +14,8 @@ import {
   cargoLines,
   cargoBoxes,
   cargoEvents,
+  exchangeRates,
+  clientTariffs,
 } from "./schema";
 import { letterCodeForIndex, buildBoxQr } from "../modules/cargo/box-code";
 
@@ -163,7 +165,29 @@ async function main() {
   }
 
   console.log(`+ ${created} namuna yuk qo'shildi (${CLIENTS.length} mijoz).`);
-  console.log("Endi: Qoldiq va Transport ekranlari to'ldirilgan.");
+
+  // Moliya uchun: valyuta kurslari + har mijozga kg tarifi (2.5 USD).
+  const today = new Date(now).toISOString().slice(0, 10);
+  await db
+    .insert(exchangeRates)
+    .values([
+      { currency: "CNY", rateToUsd: "0.14", rateDate: today },
+      { currency: "UZS", rateToUsd: "0.000079", rateDate: today },
+    ])
+    .onConflictDoNothing();
+  for (const id of clientIds) {
+    const has = await db.query.clientTariffs.findFirst({
+      where: eq(clientTariffs.clientId, id),
+    });
+    if (!has) {
+      await db
+        .insert(clientTariffs)
+        .values({ clientId: id, unit: "kg", rate: "2.5", currency: "USD", validFrom: today });
+    }
+  }
+  console.log("+ kurslar va tariflar (moliya demo uchun)");
+
+  console.log("Endi: Qoldiq, Transport va Moliya ekranlari to'ldirilgan.");
   process.exit(0);
 }
 

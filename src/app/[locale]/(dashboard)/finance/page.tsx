@@ -5,10 +5,11 @@ import { icons } from "@/components/icons";
 
 type Section = { href: string; key: string; icon: keyof typeof icons };
 
-// Bosqichma-bosqich to'ldiriladi (xarajat/foyda keyingi commitda).
 const SECTIONS: Section[] = [
   { href: "/finance/invoices", key: "invoices", icon: "cargo" },
   { href: "/finance/debtors", key: "debtors", icon: "clients" },
+  { href: "/finance/profitability", key: "profitability", icon: "dashboard" },
+  { href: "/finance/expenses", key: "expenses", icon: "finance" },
   { href: "/finance/tariffs", key: "tariffs", icon: "finance" },
   { href: "/finance/rates", key: "rates", icon: "settings" },
 ];
