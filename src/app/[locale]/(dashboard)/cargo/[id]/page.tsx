@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { getCargo } from "@/modules/cargo/service";
+import { getCargo, getCargoBoxes } from "@/modules/cargo/service";
+import { getSession } from "@/modules/shared/auth";
 import { listAttachments } from "@/modules/shared/attachments";
 import { statusColors } from "@/components/cargo-status";
 import { Link } from "@/i18n/routing";
@@ -28,10 +29,26 @@ export default async function CargoDetailPage({
   if (!data) notFound();
   const { cargo, clientCode, clientName, warehouseCode, lines } = data;
 
-  const [cargoFiles, ...lineFiles] = await Promise.all([
+  const session = await getSession();
+  const canEdit =
+    (session?.perms.includes("*") || session?.perms.includes("cargo.receive")) &&
+    cargo.status === "received_cn";
+
+  const [cargoFiles, boxes, ...lineFiles] = await Promise.all([
     listAttachments("cargo", cargo.id),
+    getCargoBoxes(cargo.id),
     ...lines.map((l) => listAttachments("cargo_line", l.id)),
   ]);
+
+  const qrRangeByLine = new Map<string, { first: string; lastLetter: string }>();
+  for (const b of boxes) {
+    const existing = qrRangeByLine.get(b.lineId);
+    if (!existing) {
+      qrRangeByLine.set(b.lineId, { first: b.qrCode, lastLetter: b.letterCode });
+    } else {
+      existing.lastLetter = b.letterCode;
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -53,13 +70,24 @@ export default async function CargoDetailPage({
             {cargo.receivedAt.toISOString().slice(0, 10)}
           </p>
         </div>
-        <Link
-          href={`/cargo/${cargo.id}/labels`}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-hover"
-        >
-          {icons.qr("h-4.5 w-4.5")}
-          {t("qrLabels")}
-        </Link>
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Link
+              href={`/cargo/${cargo.id}/edit`}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-line px-4 text-sm font-medium transition-colors hover:bg-surface-2"
+            >
+              {icons.edit("h-4.5 w-4.5")}
+              {t("editCargo")}
+            </Link>
+          )}
+          <Link
+            href={`/cargo/${cargo.id}/labels`}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-hover"
+          >
+            {icons.qr("h-4.5 w-4.5")}
+            {t("qrLabels")}
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 sm:max-w-md">
@@ -78,11 +106,14 @@ export default async function CargoDetailPage({
             <Th className="text-right">{t("weightPerBox")}</Th>
             <Th className="text-right">{t("totalWeight")}</Th>
             <Th className="text-right">{t("totalVolume")}</Th>
+            <Th>{t("qrCode")}</Th>
             <Th>{t("linePhotos")}</Th>
           </tr>
         </thead>
         <tbody>
-          {lines.map((l, i) => (
+          {lines.map((l, i) => {
+            const qr = qrRangeByLine.get(l.id);
+            return (
             <TRow key={l.id}>
               <Td className="text-muted">{l.lineNo}</Td>
               <Td className="font-medium">{l.productName}</Td>
@@ -100,6 +131,13 @@ export default async function CargoDetailPage({
               </Td>
               <Td className="text-right font-mono tabular-nums">
                 {l.totalVolumeM3}
+              </Td>
+              <Td className="font-mono text-xs whitespace-nowrap text-muted">
+                {qr
+                  ? l.boxCount > 1
+                    ? `${qr.first} … ${qr.lastLetter}`
+                    : qr.first
+                  : "—"}
               </Td>
               <Td>
                 <div className="flex flex-wrap gap-1.5">
@@ -124,7 +162,8 @@ export default async function CargoDetailPage({
                 </div>
               </Td>
             </TRow>
-          ))}
+            );
+          })}
         </tbody>
       </TableWrap>
 

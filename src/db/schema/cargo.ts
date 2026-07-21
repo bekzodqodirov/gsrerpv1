@@ -163,8 +163,12 @@ export const cargoBoxes = pgTable(
     lineId: uuid("line_id")
       .notNull()
       .references(() => cargoLines.id),
-    boxNo: integer("box_no").notNull(), // prixod ichida 1..N
-    qrCode: varchar("qr_code", { length: 64 }).notNull().unique(), // YK-2026-00001-B001
+    boxNo: integer("box_no").notNull(), // prixod ichida 1..N (ketma-ket, chiziqlar bo'yicha)
+    // Prixod ichidagi harf kodi: A, B, ... Z, AA, ... ZZ, so'ng yana A ga qaytadi.
+    letterCode: varchar("letter_code", { length: 4 }).notNull(),
+    // Yorliq/QR matni: GS1-GSR0002-A — global unique EMAS (harf kodi davriy
+    // takrorlanadi), tashqi ko'rinish uchun. Haqiqiy unique kalit — id.
+    qrCode: varchar("qr_code", { length: 64 }).notNull(),
     // Qayta upakovkada paddonga biriktiriladi:
     palletId: uuid("pallet_id").references(() => pallets.id),
     // damaged | missing kabi belgi (istisno holatlar):
@@ -173,6 +177,7 @@ export const cargoBoxes = pgTable(
   (t) => [
     index("cargo_box_cargo_idx").on(t.cargoId),
     index("cargo_box_pallet_idx").on(t.palletId),
+    index("cargo_box_qr_idx").on(t.qrCode),
     unique("cargo_box_no_uq").on(t.cargoId, t.boxNo),
   ],
 );

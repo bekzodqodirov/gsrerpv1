@@ -44,6 +44,8 @@ export const clients = pgTable("client", {
 export const warehouses = pgTable("warehouse", {
   id: uuid("id").primaryKey().defaultRandom(),
   code: varchar("code", { length: 16 }).notNull().unique(), // YIWU, GZ, URC, KSG, TAS, AND
+  // Qisqa kod — QR/karobka yorlig'ida ishlatiladi: GS1, GS2, GS3...
+  gsCode: varchar("gs_code", { length: 8 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   country: varchar("country", { length: 2 }).notNull(), // CN | UZ
   city: varchar("city", { length: 128 }),

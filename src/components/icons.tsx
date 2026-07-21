@@ -105,6 +105,12 @@ export const icons = {
       <circle cx="12" cy="13.5" r="3.4" />
     </Icon>
   ),
+  edit: (c?: string) => (
+    <Icon className={c}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
+    </Icon>
+  ),
   qr: (c?: string) => (
     <Icon className={c}>
       <rect x="3" y="3" width="7" height="7" rx="1" />

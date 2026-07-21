@@ -69,7 +69,16 @@
     "receive": "Receive",
     "received": "Cargo received. Number: {reg}",
     "empty": "No cargo found",
-    "saveError": "Save failed. Check the fields."
+    "saveError": "Save failed. Check the fields.",
+    "toggleLines": "Show products",
+    "qrCode": "QR code",
+    "editCargo": "Edit",
+    "saveChanges": "Save changes",
+    "updated": "Changes saved. Number: {reg}",
+    "cargoLocked": "This receipt has already moved on — it can no longer be edited.",
+    "confirmTitle": "Confirm the details",
+    "confirmCancel": "Cancel",
+    "confirmSubmit": "Confirm"
   },
   "cargoStatus": {
     "received_cn": "Received in China",

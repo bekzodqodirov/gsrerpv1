@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { receiveCargo } from "@/modules/cargo/service";
+import { receiveCargo, updateCargo } from "@/modules/cargo/service";
 import { receiveCargoSchema } from "@/modules/cargo/dto";
 import { saveAttachment } from "@/modules/shared/attachments";
 import { getSession } from "@/modules/shared/auth";
@@ -15,11 +15,11 @@ export type CargoFormState = {
   createdId?: string;
 };
 
+/** Yangi qabul yoki mavjud prixodni tahrirlash — cargoId maydoni bor-yo'qligiga qarab. */
 export async function receiveCargoAction(
   _prev: CargoFormState,
   formData: FormData,
 ): Promise<CargoFormState> {
-  // Qatorlar client komponentdan JSON bo'lib keladi
   let linesRaw: unknown;
   try {
     linesRaw = JSON.parse(String(formData.get("linesJson") ?? "[]"));
@@ -38,8 +38,12 @@ export async function receiveCargoAction(
     return { error: "validation" };
   }
 
+  const cargoId = String(formData.get("cargoId") ?? "").trim() || null;
+
   try {
-    const cargo = await receiveCargo(parsed.data);
+    const cargo = cargoId
+      ? await updateCargo(cargoId, parsed.data)
+      : await receiveCargo(parsed.data);
     const session = (await getSession())!;
 
     // Prixod fayllari (excel/word/pdf/rasm)
@@ -65,8 +69,11 @@ export async function receiveCargoAction(
     }
 
     revalidatePath("/[locale]/cargo", "page");
+    revalidatePath("/[locale]/cargo/[id]", "page");
     return { createdReg: cargo.regNumber, createdId: cargo.id };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "CARGO_LOCKED") return { error: "cargoLocked" };
     console.error("[cargo] server error:", e);
     return { error: "server" };
   }

@@ -1,5 +1,5 @@
 {
-  "id": "456f40fe-de17-4e3b-bd94-25017a357b73",
+  "id": "e808c9aa-b65f-490b-9d72-6ddfde1c860a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -683,6 +683,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "gs_code": {
+          "name": "gs_code",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "name": {
           "name": "name",
           "type": "varchar(255)",
@@ -731,6 +737,13 @@
           "nullsNotDistinct": false,
           "columns": [
             "code"
+          ]
+        },
+        "warehouse_gs_code_unique": {
+          "name": "warehouse_gs_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "gs_code"
           ]
         }
       },
@@ -880,6 +893,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "letter_code": {
+          "name": "letter_code",
+          "type": "varchar(4)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "qr_code": {
           "name": "qr_code",
           "type": "varchar(64)",
@@ -920,6 +939,21 @@
           "columns": [
             {
               "expression": "pallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "cargo_box_qr_idx": {
+          "name": "cargo_box_qr_idx",
+          "columns": [
+            {
+              "expression": "qr_code",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -974,13 +1008,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "cargo_box_qr_code_unique": {
-          "name": "cargo_box_qr_code_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "qr_code"
-          ]
-        },
         "cargo_box_no_uq": {
           "name": "cargo_box_no_uq",
           "nullsNotDistinct": false,

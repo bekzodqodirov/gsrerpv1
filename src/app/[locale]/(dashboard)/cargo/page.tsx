@@ -16,14 +16,13 @@ import {
   Td,
   TRow,
   EmptyRow,
-  Badge,
   Input,
   Select,
   Button,
 } from "@/components/ui";
 import { icons } from "@/components/icons";
-import { statusColors } from "@/components/cargo-status";
 import { CargoForm } from "./cargo-form";
+import { CargoShipmentsTable } from "./cargo-shipments-table";
 
 export default async function CargoPage({
   searchParams,
@@ -87,56 +86,8 @@ export default async function CargoPage({
         />
       </CollapsibleCard>
 
-      {/* Prixodlar (yuklar) — yig'indi bo'yicha */}
-      <TableWrap>
-        <thead className="bg-surface-2/60">
-          <tr>
-            <Th>{t("regNumber")}</Th>
-            <Th>{t("client")}</Th>
-            <Th>{t("warehouse")}</Th>
-            <Th className="text-right">{t("boxCount")}</Th>
-            <Th className="text-right">{t("totalWeight")}</Th>
-            <Th className="text-right">{t("totalVolume")}</Th>
-            <Th>{t("status")}</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 && <EmptyRow colSpan={7} text={t("empty")} />}
-          {rows.map((c) => (
-            <TRow key={c.id}>
-              <Td>
-                <Link
-                  href={`/cargo/${c.id}`}
-                  className="font-mono font-semibold text-primary hover:underline"
-                >
-                  {c.regNumber}
-                </Link>
-              </Td>
-              <Td>
-                <span className="font-mono font-semibold">{c.clientCode}</span>
-                <span className="ml-1.5 hidden text-muted sm:inline">
-                  {c.clientName}
-                </span>
-              </Td>
-              <Td className="text-muted">{c.warehouseCode ?? "—"}</Td>
-              <Td className="text-right font-mono tabular-nums">
-                {c.totalBoxes}
-              </Td>
-              <Td className="text-right font-mono tabular-nums">
-                {c.totalWeightKg}
-              </Td>
-              <Td className="text-right font-mono tabular-nums">
-                {c.totalVolumeM3}
-              </Td>
-              <Td>
-                <Badge className={statusColors[c.status] ?? ""}>
-                  {ts(c.status)}
-                </Badge>
-              </Td>
-            </TRow>
-          ))}
-        </tbody>
-      </TableWrap>
+      {/* Prixodlar (yuklar) — umumiy rasm, kengaytiriladigan tovar ro'yxati */}
+      <CargoShipmentsTable rows={rows} />
 
       {/* Tovarlar — qatorlar, bir prixodga tegishlilari guruhlab ko'rsatiladi */}
       <div>
@@ -151,20 +102,22 @@ export default async function CargoPage({
               <Th className="text-right">{t("boxCount")}</Th>
               <Th className="text-right">{t("totalWeight")}</Th>
               <Th className="text-right">{t("totalVolume")}</Th>
+              <Th>{t("qrCode")}</Th>
             </tr>
           </thead>
           <tbody>
-            {lineRows.length === 0 && <EmptyRow colSpan={5} text={t("empty")} />}
+            {lineRows.length === 0 && <EmptyRow colSpan={6} text={t("empty")} />}
             {(() => {
               let lastReg: string | null = null;
               return lineRows.map((r) => {
                 const isNewGroup = r.regNumber !== lastReg;
                 lastReg = r.regNumber;
+                const lastLetter = r.qrLast?.split("-").pop();
                 return (
                   <Fragment key={r.lineId}>
                     {isNewGroup && (
                       <tr className="border-t border-line bg-surface-2/60">
-                        <td colSpan={5} className="px-4 py-1.5">
+                        <td colSpan={6} className="px-4 py-1.5">
                           <Link
                             href={`/cargo/${r.cargoId}`}
                             className="font-mono text-xs font-bold text-primary hover:underline"
@@ -213,6 +166,13 @@ export default async function CargoPage({
                       </Td>
                       <Td className="text-right font-mono tabular-nums">
                         {r.totalVolumeM3}
+                      </Td>
+                      <Td className="font-mono text-xs whitespace-nowrap text-muted">
+                        {r.qrFirst
+                          ? r.boxCount > 1
+                            ? `${r.qrFirst} … ${lastLetter}`
+                            : r.qrFirst
+                          : "—"}
                       </Td>
                     </TRow>
                   </Fragment>

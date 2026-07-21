@@ -69,7 +69,16 @@
     "receive": "收货",
     "received": "货物已收，编号：{reg}",
     "empty": "未找到货物",
-    "saveError": "保存失败，请检查字段。"
+    "saveError": "保存失败，请检查字段。",
+    "toggleLines": "显示商品",
+    "qrCode": "二维码",
+    "editCargo": "编辑",
+    "saveChanges": "保存修改",
+    "updated": "修改已保存，编号：{reg}",
+    "cargoLocked": "该批次已进入下一环节，无法再编辑。",
+    "confirmTitle": "请确认信息",
+    "confirmCancel": "取消",
+    "confirmSubmit": "确认"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",

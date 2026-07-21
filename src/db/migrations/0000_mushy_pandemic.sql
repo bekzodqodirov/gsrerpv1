@@ -100,13 +100,15 @@ CREATE TABLE "product_type" (
 CREATE TABLE "warehouse" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"code" varchar(16) NOT NULL,
+	"gs_code" varchar(8) NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"country" varchar(2) NOT NULL,
 	"city" varchar(128),
 	"kind" varchar(16) NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "warehouse_code_unique" UNIQUE("code")
+	CONSTRAINT "warehouse_code_unique" UNIQUE("code"),
+	CONSTRAINT "warehouse_gs_code_unique" UNIQUE("gs_code")
 );
 --> statement-breakpoint
 CREATE TABLE "attachment" (
@@ -127,10 +129,10 @@ CREATE TABLE "cargo_box" (
 	"cargo_id" uuid NOT NULL,
 	"line_id" uuid NOT NULL,
 	"box_no" integer NOT NULL,
+	"letter_code" varchar(4) NOT NULL,
 	"qr_code" varchar(64) NOT NULL,
 	"pallet_id" uuid,
 	"flag" varchar(16),
-	CONSTRAINT "cargo_box_qr_code_unique" UNIQUE("qr_code"),
 	CONSTRAINT "cargo_box_no_uq" UNIQUE("cargo_id","box_no")
 );
 --> statement-breakpoint
@@ -219,6 +221,7 @@ ALTER TABLE "pallet" ADD CONSTRAINT "pallet_created_by_user_id_fk" FOREIGN KEY (
 CREATE INDEX "attachment_entity_idx" ON "attachment" USING btree ("entity","entity_id");--> statement-breakpoint
 CREATE INDEX "cargo_box_cargo_idx" ON "cargo_box" USING btree ("cargo_id");--> statement-breakpoint
 CREATE INDEX "cargo_box_pallet_idx" ON "cargo_box" USING btree ("pallet_id");--> statement-breakpoint
+CREATE INDEX "cargo_box_qr_idx" ON "cargo_box" USING btree ("qr_code");--> statement-breakpoint
 CREATE INDEX "cargo_event_cargo_idx" ON "cargo_event" USING btree ("cargo_id");--> statement-breakpoint
 CREATE INDEX "cargo_line_cargo_idx" ON "cargo_line" USING btree ("cargo_id");--> statement-breakpoint
 CREATE INDEX "cargo_client_idx" ON "cargo" USING btree ("client_id");--> statement-breakpoint

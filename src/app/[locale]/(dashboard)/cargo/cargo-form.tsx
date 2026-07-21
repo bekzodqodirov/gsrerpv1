@@ -21,6 +21,17 @@ type Line = {
   manual: boolean; // o'lchab bo'lmagan: umumiy kg/kub qo'lda
 };
 
+export type InitialCargoLine = {
+  productName: string;
+  boxCount: number;
+  boxLengthCm?: string | null;
+  boxWidthCm?: string | null;
+  boxHeightCm?: string | null;
+  weightPerBoxKg?: string | null;
+  totalWeightKg: string;
+  totalVolumeM3: string;
+};
+
 const emptyLine = (): Line => ({
   productName: "",
   boxCount: "",
@@ -32,6 +43,21 @@ const emptyLine = (): Line => ({
   totalVolumeM3: "",
   manual: false,
 });
+
+function lineFromInitial(l: InitialCargoLine): Line {
+  const manual = l.boxLengthCm == null;
+  return {
+    productName: l.productName,
+    boxCount: String(l.boxCount),
+    boxLengthCm: l.boxLengthCm ?? "",
+    boxWidthCm: l.boxWidthCm ?? "",
+    boxHeightCm: l.boxHeightCm ?? "",
+    weightPerBoxKg: l.weightPerBoxKg ?? "",
+    totalWeightKg: manual ? l.totalWeightKg : "",
+    totalVolumeM3: manual ? l.totalVolumeM3 : "",
+    manual,
+  };
+}
 
 function lineToPayload(l: Line) {
   return {
@@ -71,7 +97,7 @@ function PhotoPicker({ name, label }: { name: string; label: string }) {
   const [count, setCount] = useState(0);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
       <input
         ref={inputRef}
         name={name}
@@ -84,7 +110,7 @@ function PhotoPicker({ name, label }: { name: string; label: string }) {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+        className="inline-flex h-10 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
       >
         {icons.camera("h-3.5 w-3.5")}
         {label}
@@ -102,34 +128,49 @@ export function CargoForm({
   clients,
   warehouses,
   fixedWarehouseId,
+  cargoId,
+  initialClientId,
+  initialWarehouseId,
+  initialNote,
+  initialLines,
 }: {
   clients: Option[];
   warehouses: Option[];
   fixedWarehouseId: string | null;
+  cargoId?: string;
+  initialClientId?: string;
+  initialWarehouseId?: string;
+  initialNote?: string;
+  initialLines?: InitialCargoLine[];
 }) {
   const t = useTranslations("cargo");
   const tc = useTranslations("common");
+  const isEdit = Boolean(cargoId);
   const formRef = useRef<HTMLFormElement>(null);
-  const [lines, setLines] = useState<Line[]>([emptyLine()]);
+  const [lines, setLines] = useState<Line[]>(
+    initialLines?.length ? initialLines.map(lineFromInitial) : [emptyLine()],
+  );
   const [translatingIdx, setTranslatingIdx] = useState<number | null>(null);
+  const [clientId, setClientId] = useState(initialClientId ?? "");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [state, formAction, pending] = useActionState<CargoFormState, FormData>(
     receiveCargoAction,
     {},
   );
 
   useEffect(() => {
-    if (state.createdReg) {
+    if (state.createdReg && !isEdit) {
       formRef.current?.reset();
       setLines([emptyLine()]);
+      setClientId("");
     }
-  }, [state.createdReg]);
+  }, [state.createdReg, isEdit]);
 
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((prev) => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
   async function handleProductBlur(i: number) {
     const name = lines[i].productName;
-    // Allaqachon tarjima qo'shilgan bo'lsa (qavs bor) — qayta urinmaymiz
     if (!name.trim() || name.includes("(")) return;
     setTranslatingIdx(i);
     const translated = await translateProductNameAction(name);
@@ -156,8 +197,16 @@ export function CargoForm({
     { boxes: 0, kg: 0, m3: 0 },
   );
 
+  const selectedClient = clients.find((c) => c.id === clientId);
+
+  function handleReviewClick() {
+    if (!formRef.current?.reportValidity()) return;
+    setConfirmOpen(true);
+  }
+
   return (
     <form ref={formRef} action={formAction}>
+      {cargoId && <input type="hidden" name="cargoId" value={cargoId} />}
       <input
         type="hidden"
         name="linesJson"
@@ -167,7 +216,12 @@ export function CargoForm({
       {/* Prixod sarlavhasi */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={t("client")} required>
-          <Select name="clientId" required defaultValue="">
+          <Select
+            name="clientId"
+            required
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+          >
             <option value="" disabled>
               —
             </option>
@@ -187,7 +241,11 @@ export function CargoForm({
               className="bg-surface-2 text-muted"
             />
           ) : (
-            <Select name="originWarehouseId" required defaultValue="">
+            <Select
+              name="originWarehouseId"
+              required
+              defaultValue={initialWarehouseId ?? ""}
+            >
               <option value="" disabled>
                 —
               </option>
@@ -215,16 +273,16 @@ export function CargoForm({
         </Field>
       </div>
 
-      {/* Qatorlar: har xil tovar alohida. Tartib: nomi -> soni -> o'lcham/og'irlik -> rasm (oxirida). */}
-      <div className="mt-5 space-y-4">
+      {/* Qatorlar: har xil tovar alohida. Barcha maydonlar bitta qatorda. */}
+      <div className="mt-5 space-y-3">
         {lines.map((l, i) => {
           const preview = linePreview(l);
           return (
             <div
               key={i}
-              className="rounded-xl border border-line bg-surface-2/40 p-4"
+              className="rounded-xl border border-line bg-surface-2/40 p-3"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
                 <span className="text-[11px] font-bold tracking-wider text-muted uppercase">
                   {t("line")} {i + 1}
                 </span>
@@ -252,10 +310,10 @@ export function CargoForm({
                 </div>
               </div>
 
-              <div className="mt-3 space-y-4">
-                {/* 1. Tovar nomi (xitoycha kiritilsa, chetga chiqqach ruscha tarjima qavsda qo'shiladi) */}
-                <Field label={t("product")} required>
-                  <div className="relative">
+              {/* Bitta qator: nomi -> soni -> o'lcham/og'irlik (yoki jami) -> rasm */}
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="relative w-full min-w-[180px] flex-1 sm:w-auto">
+                  <Field label={t("product")} required>
                     <Input
                       required
                       value={l.productName}
@@ -264,16 +322,15 @@ export function CargoForm({
                       }
                       onBlur={() => handleProductBlur(i)}
                     />
-                    {translatingIdx === i && (
-                      <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">
-                        {t("translating")}
-                      </span>
-                    )}
-                  </div>
-                </Field>
+                  </Field>
+                  {translatingIdx === i && (
+                    <span className="absolute top-1/2 right-3 translate-y-1 text-xs text-muted">
+                      {t("translating")}
+                    </span>
+                  )}
+                </div>
 
-                {/* 2. Soni -> o'lcham/og'irlik — ketma-ket */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="w-20 shrink-0">
                   <Field label={t("boxCount")} required>
                     <Input
                       type="number"
@@ -287,9 +344,11 @@ export function CargoForm({
                       }
                     />
                   </Field>
+                </div>
 
-                  {l.manual ? (
-                    <>
+                {l.manual ? (
+                  <>
+                    <div className="w-28 shrink-0">
                       <Field label={t("totalWeight")} required>
                         <Input
                           type="number"
@@ -303,6 +362,8 @@ export function CargoForm({
                           }
                         />
                       </Field>
+                    </div>
+                    <div className="w-28 shrink-0">
                       <Field label={t("totalVolume")} required>
                         <Input
                           type="number"
@@ -316,17 +377,19 @@ export function CargoForm({
                           }
                         />
                       </Field>
-                    </>
-                  ) : (
-                    <>
-                      <Field label={t("boxDims")} required className="lg:col-span-2">
-                        <div className="flex items-center gap-1.5">
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-44 shrink-0">
+                      <Field label={t("boxDims")} required>
+                        <div className="flex items-center gap-1">
                           {(
                             ["boxLengthCm", "boxWidthCm", "boxHeightCm"] as const
                           ).map((k, di) => (
                             <span
                               key={k}
-                              className="flex flex-1 items-center gap-1.5"
+                              className="flex flex-1 items-center gap-1"
                             >
                               {di > 0 && (
                                 <span className="text-xs text-muted">×</span>
@@ -341,12 +404,14 @@ export function CargoForm({
                                 onChange={(e) =>
                                   setLine(i, { [k]: e.target.value })
                                 }
-                                className="min-w-0 px-2 text-center"
+                                className="min-w-0 px-1.5 text-center"
                               />
                             </span>
                           ))}
                         </div>
                       </Field>
+                    </div>
+                    <div className="w-24 shrink-0">
                       <Field label={t("weightPerBox")} required>
                         <Input
                           type="number"
@@ -360,23 +425,23 @@ export function CargoForm({
                           }
                         />
                       </Field>
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </>
+                )}
 
-                {/* 3. Rasm — oxirida, kichik tugma */}
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="pb-0.5">
                   <PhotoPicker
                     name={`linePhotos_${i}`}
                     label={t("linePhotos")}
                   />
-                  {preview && (
-                    <span className="font-mono text-xs font-medium text-muted tabular-nums">
-                      = {preview.kg ? `${+preview.kg.toFixed(3)} kg` : "—"} ·{" "}
-                      {preview.m3 ? `${+preview.m3.toFixed(4)} m³` : "—"}
-                    </span>
-                  )}
                 </div>
+
+                {preview && (
+                  <span className="ml-auto pb-2 font-mono text-xs font-medium text-muted tabular-nums">
+                    = {preview.kg ? `${+preview.kg.toFixed(3)} kg` : "—"} ·{" "}
+                    {preview.m3 ? `${+preview.m3.toFixed(4)} m³` : "—"}
+                  </span>
+                )}
               </div>
             </div>
           );
@@ -402,18 +467,96 @@ export function CargoForm({
 
       {state.error && (
         <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {t("saveError")}
+          {state.error === "cargoLocked" ? t("cargoLocked") : t("saveError")}
         </p>
       )}
       {state.createdReg && (
         <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-          {t("received", { reg: state.createdReg })}
+          {isEdit
+            ? t("updated", { reg: state.createdReg })
+            : t("received", { reg: state.createdReg })}
         </p>
       )}
 
-      <Button type="submit" disabled={pending} className="mt-4">
-        {pending ? tc("loading") : t("receive")}
+      <Button
+        type="button"
+        onClick={handleReviewClick}
+        disabled={pending}
+        className="mt-4"
+      >
+        {pending ? tc("loading") : isEdit ? t("saveChanges") : t("receive")}
       </Button>
+
+      {confirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal
+        >
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-line bg-surface p-5 shadow-xl">
+            <h3 className="text-base font-bold">{t("confirmTitle")}</h3>
+
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted">{t("client")}</dt>
+              <dd className="text-right font-medium">
+                {selectedClient
+                  ? `${selectedClient.code} — ${selectedClient.name}`
+                  : "—"}
+              </dd>
+              <dt className="text-muted">{t("warehouse")}</dt>
+              <dd className="text-right font-medium">
+                {fixedWarehouse?.code ?? "—"}
+              </dd>
+            </dl>
+
+            <div className="mt-3 space-y-1.5 border-t border-line pt-3">
+              {lines.map((l, i) => {
+                const p = linePreview(l);
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <span className="truncate pr-2">
+                      {l.productName || "—"}{" "}
+                      <span className="text-muted">× {l.boxCount || 0}</span>
+                    </span>
+                    <span className="shrink-0 font-mono text-xs text-muted tabular-nums">
+                      {p ? `${+p.kg.toFixed(2)} kg · ${+p.m3.toFixed(3)} m³` : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm font-semibold">
+              <span>Σ {totals.boxes}</span>
+              <span className="font-mono tabular-nums">
+                {+totals.kg.toFixed(3)} kg · {+totals.m3.toFixed(4)} m³
+              </span>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmOpen(false)}
+              >
+                {t("confirmCancel")}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  formRef.current?.requestSubmit();
+                }}
+              >
+                {t("confirmSubmit")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

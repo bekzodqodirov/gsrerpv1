@@ -51,8 +51,13 @@ export default async function CargoLabelsPage({
               {b.qrCode}
             </div>
             <div className="text-xs text-gray-700">
+              <span className="font-semibold">{data.warehouseCode}</span> ·{" "}
               <span className="font-semibold">{data.clientCode}</span> ·{" "}
               {b.productName}
+            </div>
+            <div className="text-[11px] text-gray-500">
+              {data.cargo.receivedAt.toISOString().slice(0, 10)} ·{" "}
+              {b.boxNo}/{boxes.length}
             </div>
           </div>
         ))}

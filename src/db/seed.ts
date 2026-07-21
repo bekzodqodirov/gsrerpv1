@@ -39,13 +39,14 @@ const PERMISSIONS = [
 ] as const;
 
 // Skladlar: 4 Xitoy (arenda) + 2 O'zbekiston customs warehouse (namuna)
+// gsCode — QR/karobka yorlig'ida ishlatiladigan qisqa kod.
 const WAREHOUSES = [
-  { code: "YIWU", name: "Yiwu skladi", country: "CN", city: "Yiwu", kind: "receiving" },
-  { code: "GZ", name: "Guangzhou skladi", country: "CN", city: "Guangzhou", kind: "receiving" },
-  { code: "URC", name: "Urumchi skladi", country: "CN", city: "Urumqi", kind: "receiving" },
-  { code: "KSG", name: "Qashqar skladi", country: "CN", city: "Kashgar", kind: "consolidation" },
-  { code: "TAS", name: "Toshkent customs warehouse", country: "UZ", city: "Toshkent", kind: "customs" },
-  { code: "AND", name: "Andijon customs warehouse", country: "UZ", city: "Andijon", kind: "customs" },
+  { code: "YIWU", gsCode: "GS1", name: "Yiwu skladi", country: "CN", city: "Yiwu", kind: "receiving" },
+  { code: "GZ", gsCode: "GS2", name: "Guangzhou skladi", country: "CN", city: "Guangzhou", kind: "receiving" },
+  { code: "URC", gsCode: "GS3", name: "Urumchi skladi", country: "CN", city: "Urumqi", kind: "receiving" },
+  { code: "KSG", gsCode: "GS4", name: "Qashqar skladi", country: "CN", city: "Kashgar", kind: "consolidation" },
+  { code: "TAS", gsCode: "GS5", name: "Toshkent customs warehouse", country: "UZ", city: "Toshkent", kind: "customs" },
+  { code: "AND", gsCode: "GS6", name: "Andijon customs warehouse", country: "UZ", city: "Andijon", kind: "customs" },
 ] as const;
 
 const CURRENCIES = [
