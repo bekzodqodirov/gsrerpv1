@@ -12,8 +12,15 @@ import {
   arriveBatch,
   unloadBatch,
   closeBatch,
+  scanLoad,
+  scanUnload,
 } from "@/modules/tms/service";
-import { batchCreateSchema, carrierSchema } from "@/modules/tms/dto";
+import {
+  batchCreateSchema,
+  carrierSchema,
+  scanSchema,
+  type ScanResult,
+} from "@/modules/tms/dto";
 
 function revalidateTms() {
   revalidatePath("/[locale]/tms", "layout");
@@ -116,4 +123,32 @@ export async function unloadAction(batchId: string) {
 export async function closeAction(batchId: string) {
   await closeBatch(batchId);
   revalidateTms();
+}
+
+// ─── Scan (yuklash / tushirish) ──────────────────────────────────────────────
+
+export async function scanLoadAction(
+  batchId: string,
+  _prev: ScanResult | null,
+  formData: FormData,
+): Promise<ScanResult> {
+  const code = String(formData.get("code") ?? "");
+  const parsed = scanSchema.safeParse({ code });
+  if (!parsed.success) return { outcome: "unknown", code };
+  const res = await scanLoad(batchId, parsed.data.code);
+  revalidateTms();
+  return res;
+}
+
+export async function scanUnloadAction(
+  batchId: string,
+  _prev: ScanResult | null,
+  formData: FormData,
+): Promise<ScanResult> {
+  const code = String(formData.get("code") ?? "");
+  const parsed = scanSchema.safeParse({ code });
+  if (!parsed.success) return { outcome: "unknown", code };
+  const res = await scanUnload(batchId, parsed.data.code);
+  revalidateTms();
+  return res;
 }

@@ -18,7 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { warehouses, currencies } from "./catalog";
 import { users } from "./system";
-import { cargos } from "./cargo";
+import { cargos, cargoBoxes } from "./cargo";
 
 // Partiya bosqichlari:
 export const batchStatusEnum = pgEnum("batch_status", [
@@ -118,5 +118,45 @@ export const batchCargos = pgTable(
     index("batch_cargo_batch_idx").on(t.batchId),
     index("batch_cargo_cargo_idx").on(t.cargoId),
     unique("batch_cargo_uq").on(t.batchId, t.cargoId),
+  ],
+);
+
+// ─── Partiya karobkalari (scan holati) ───────────────────────────────────────
+// Yuk partiyaga qo'shilganda uning har bir karobkasi uchun bitta qator ochiladi
+// (kutilayotgan manifest). Yuklashda skladchi har karobkani scan qiladi
+// (loadedScan), tushirishda yana scan qiladi (unloadedScan). Nomuvofiqlik:
+//   - kutilgan, lekin scan qilinmagan → yo'qolgan (missing)
+//   - scan qilingan, lekin manifestda yo'q → ortiqcha (extra)
+//   - shikastlangan → damaged
+
+export const batchBoxes = pgTable(
+  "batch_box",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => batches.id, { onDelete: "cascade" }),
+    boxId: uuid("box_id")
+      .notNull()
+      .references(() => cargoBoxes.id),
+    cargoId: uuid("cargo_id")
+      .notNull()
+      .references(() => cargos.id),
+
+    loadedScan: boolean("loaded_scan").notNull().default(false),
+    loadedAt: timestamp("loaded_at", { withTimezone: true }),
+    loadedBy: uuid("loaded_by").references(() => users.id),
+
+    unloadedScan: boolean("unloaded_scan").notNull().default(false),
+    unloadedAt: timestamp("unloaded_at", { withTimezone: true }),
+    unloadedBy: uuid("unloaded_by").references(() => users.id),
+
+    // damaged | missing | extra
+    flag: varchar("flag", { length: 16 }),
+  },
+  (t) => [
+    index("batch_box_batch_idx").on(t.batchId),
+    index("batch_box_box_idx").on(t.boxId),
+    unique("batch_box_uq").on(t.batchId, t.boxId),
   ],
 );

@@ -31,6 +31,29 @@ export const batchCreateSchema = z.object({
 });
 export type BatchCreateInput = z.infer<typeof batchCreateSchema>;
 
+export const scanSchema = z.object({
+  code: z.string().trim().min(3).max(64),
+});
+export type ScanInput = z.infer<typeof scanSchema>;
+
+// Scan natijasi — UI'da darrov feedback (ovoz/rang) uchun.
+export type ScanOutcome =
+  | "loaded" //      karobka yuklandi (birinchi marta)
+  | "unloaded" //    karobka qabul qilindi
+  | "duplicate" //   allaqachon scan qilingan
+  | "not_on_plan" // haqiqiy karobka, lekin bu partiyaga tegishli emas
+  | "extra" //       manifestda yo'q karobka tushirildi (ortiqcha)
+  | "unknown" //     bunday QR umuman topilmadi
+  | "wrong_status"; // partiya holati scan qilishga mos emas
+
+export type ScanResult = {
+  outcome: ScanOutcome;
+  code: string;
+  label?: string; // "GSR-1007 · Mebel furnitura · 12/50"
+  done?: number;
+  total?: number;
+};
+
 /**
  * Partiya jo'nashida (origin) va tushirilishida (destination) yuk qanday
  * holatga o'tishi — manzil ombori turi bo'yicha.

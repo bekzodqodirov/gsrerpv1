@@ -11,11 +11,20 @@ export function letterCodeForIndex(zeroBasedIndex: number): string {
   return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
 }
 
-/** Yorliq/QR matni: GS1-GSR0002-A. */
+/** Tovar (qator) darajasidagi harf-kod matni: GS1-GSR0002-A (inson uchun). */
 export function buildBoxCode(
   gsCode: string,
   clientCode: string,
   letter: string,
 ): string {
   return `${gsCode}-${clientCode}-${letter}`;
+}
+
+/**
+ * Har karobkaning UNIKAL QR matni: YK-2026-00006-B037.
+ * reg-raqam (prixod bo'yicha unikal) + karobka tartib raqami — global unikal,
+ * to'g'ridan-to'g'ri bitta karobkaga ishora qiladi (scan qilish uchun).
+ */
+export function buildBoxQr(regNumber: string, boxNo: number): string {
+  return `${regNumber}-B${String(boxNo).padStart(3, "0")}`;
 }

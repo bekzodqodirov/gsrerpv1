@@ -25,6 +25,7 @@ import {
   removeCargoAction,
 } from "../actions";
 import { PrintButton } from "./print-button";
+import { ScanPanel } from "./scan-panel";
 
 export default async function BatchDetailPage({
   params,
@@ -40,13 +41,27 @@ export default async function BatchDetailPage({
   const ts = await getTranslations("batchStatus");
   const tcs = await getTranslations("cargoStatus");
 
-  const { batch, origin, dest, carrier, items, totals, canManage, canLoad } =
-    data;
+  const {
+    batch,
+    origin,
+    dest,
+    carrier,
+    items,
+    totals,
+    canManage,
+    canLoad,
+    loadProgress,
+    unloadProgress,
+    missingCount,
+  } = data;
 
   const num = (n: number, d = 0) =>
     new Intl.NumberFormat(locale, { maximumFractionDigits: d }).format(n);
 
   const editable = batch.status === "planned" || batch.status === "loading";
+  const unloadable = batch.status === "departed" || batch.status === "arrived";
+  const loadComplete =
+    loadProgress.total > 0 && loadProgress.done >= loadProgress.total;
   const available =
     editable && canLoad ? await getAvailableCargos(id) : [];
 
@@ -113,7 +128,19 @@ export default async function BatchDetailPage({
               <ActionForm action={startLoadingAction.bind(null, id)} label={t("startLoading")} variant="outline" />
             )}
             {(batch.status === "planned" || batch.status === "loading") && (
-              <ActionForm action={departAction.bind(null, id)} label={t("depart")} disabled={items.length === 0} />
+              <ActionForm
+                action={departAction.bind(null, id)}
+                label={t("depart")}
+                disabled={!loadComplete}
+              />
+            )}
+            {editable && !loadComplete && loadProgress.total > 0 && (
+              <span className="self-center text-xs text-muted">
+                {t("departBlocked", {
+                  done: loadProgress.done,
+                  total: loadProgress.total,
+                })}
+              </span>
             )}
             {batch.status === "departed" && (
               <ActionForm action={arriveAction.bind(null, id)} label={t("arrive")} variant="outline" />
@@ -157,6 +184,29 @@ export default async function BatchDetailPage({
         </Card>
       )}
 
+      {/* ─── Karobka scan (yuklash / tushirish) ─── */}
+      {editable && canLoad && loadProgress.total > 0 && (
+        <ScanPanel
+          batchId={id}
+          mode="load"
+          done={loadProgress.done}
+          total={loadProgress.total}
+        />
+      )}
+      {unloadable && canLoad && (
+        <ScanPanel
+          batchId={id}
+          mode="unload"
+          done={unloadProgress.done}
+          total={unloadProgress.total}
+        />
+      )}
+      {missingCount > 0 && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300 print:hidden">
+          ⚠ {t("missingBoxes", { n: missingCount })}
+        </div>
+      )}
+
       {/* ─── Jamlar ─── */}
       <div className="grid grid-cols-3 gap-3">
         <StatCard value={num(totals.totalVolumeM3, 2)} label={`${t("volume")}, m³`} />
@@ -184,12 +234,13 @@ export default async function BatchDetailPage({
               <Th className="text-right">{t("boxes")}</Th>
               <Th className="text-right">{t("weight")}</Th>
               <Th className="text-right">{t("volume")}</Th>
+              <Th className="text-center print:hidden">{t("scanCol")}</Th>
               {editable && canLoad && <Th className="w-10 print:hidden" />}
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <EmptyRow colSpan={editable && canLoad ? 7 : 6} text={t("noCargo")} />
+              <EmptyRow colSpan={editable && canLoad ? 8 : 7} text={t("noCargo")} />
             ) : (
               items.map((i) => (
                 <TRow key={i.cargoId}>
@@ -213,6 +264,12 @@ export default async function BatchDetailPage({
                   </Td>
                   <Td className="text-right font-mono tabular-nums">
                     {num(i.m3, 2)}
+                  </Td>
+                  <Td className="text-center print:hidden">
+                    <ScanCell
+                      scan={i.scan}
+                      phase={unloadable || batch.status === "unloaded" ? "unload" : "load"}
+                    />
                   </Td>
                   {editable && canLoad && (
                     <Td className="print:hidden">
@@ -310,6 +367,34 @@ function ActionForm({
         {label}
       </Button>
     </form>
+  );
+}
+
+function ScanCell({
+  scan,
+  phase,
+}: {
+  scan: { total: number; loaded: number; unloaded: number; missing: number };
+  phase: "load" | "unload";
+}) {
+  const done = phase === "load" ? scan.loaded : scan.unloaded;
+  const full = scan.total > 0 && done >= scan.total;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        className={
+          "font-mono text-xs tabular-nums " +
+          (full ? "font-semibold text-emerald-600" : "text-muted")
+        }
+      >
+        {done}/{scan.total}
+      </span>
+      {scan.missing > 0 && (
+        <span className="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-700 dark:bg-red-900 dark:text-red-200">
+          −{scan.missing}
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -2,19 +2,23 @@
 //
 // Kelishilgan narx (agreedPrice) — nozik ma'lumot. Faqat tms.manage huquqiga
 // ega foydalanuvchi ko'radi; sklad xodimiga hech qachon qaytarilmaydi.
-import { and, asc, desc, eq, inArray, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   carriers,
   batches,
   batchCargos,
+  batchBoxes,
   cargos,
+  cargoBoxes,
+  cargoLines,
   cargoEvents,
   clients,
   warehouses,
   auditLog,
   docSequences,
 } from "@/db/schema";
+import type { ScanResult } from "./dto";
 import { getSession, requirePermission } from "@/modules/shared/auth";
 import type { SessionPayload } from "@/modules/shared/session";
 import { nextNumber } from "@/modules/shared/numbering";
@@ -300,6 +304,42 @@ export async function getBatch(id: string) {
     { cargoCount: 0, boxes: 0, kg: 0, m3: 0 },
   );
 
+  // Karobka scan holati (yuklandi/tushirildi/yetishmadi) — yuk bo'yicha va jami.
+  const bbRows = await db
+    .select({
+      cargoId: batchBoxes.cargoId,
+      loaded: batchBoxes.loadedScan,
+      unloaded: batchBoxes.unloadedScan,
+      flag: batchBoxes.flag,
+    })
+    .from(batchBoxes)
+    .where(eq(batchBoxes.batchId, id));
+  const scanByCargo = new Map<
+    string,
+    { total: number; loaded: number; unloaded: number; missing: number }
+  >();
+  let loadDone = 0;
+  let unloadDone = 0;
+  let missingTotal = 0;
+  for (const r of bbRows) {
+    const s = scanByCargo.get(r.cargoId) ?? { total: 0, loaded: 0, unloaded: 0, missing: 0 };
+    s.total += 1;
+    if (r.loaded) {
+      s.loaded += 1;
+      loadDone += 1;
+    }
+    if (r.unloaded) {
+      s.unloaded += 1;
+      unloadDone += 1;
+    }
+    if (r.flag === "missing") {
+      s.missing += 1;
+      missingTotal += 1;
+    }
+    scanByCargo.set(r.cargoId, s);
+  }
+  const boxTotal = bbRows.length;
+
   const showPrice = canSeePrice(session);
   return {
     batch: {
@@ -331,6 +371,12 @@ export async function getBatch(id: string) {
       ...i,
       kg: Number(i.kg),
       m3: Number(i.m3),
+      scan: scanByCargo.get(i.cargoId) ?? {
+        total: i.boxes,
+        loaded: 0,
+        unloaded: 0,
+        missing: 0,
+      },
     })),
     totals: {
       cargoCount: totals.cargoCount,
@@ -338,6 +384,9 @@ export async function getBatch(id: string) {
       totalWeightKg: Math.round(totals.kg * 1000) / 1000,
       totalVolumeM3: Math.round(totals.m3 * 10000) / 10000,
     },
+    loadProgress: { done: loadDone, total: boxTotal },
+    unloadProgress: { done: unloadDone, total: boxTotal },
+    missingCount: missingTotal,
     canManage: session.perms.includes("*") || session.perms.includes("tms.manage"),
     canLoad:
       session.perms.includes("*") ||
@@ -401,25 +450,163 @@ async function assertPlannable(batchId: string) {
 }
 
 export async function addCargoToBatch(batchId: string, cargoId: string) {
-  const session = await requireAny(["tms.manage", "tms.load"]);
+  await requireAny(["tms.manage", "tms.load"]);
   const b = await assertPlannable(batchId);
   const cargo = await db.query.cargos.findFirst({ where: eq(cargos.id, cargoId) });
   if (!cargo) throw new Error("CARGO_NOT_FOUND");
   if (cargo.currentWarehouseId !== b.originWarehouseId) {
     throw new Error("CARGO_NOT_AT_ORIGIN");
   }
-  await db
-    .insert(batchCargos)
-    .values({ batchId, cargoId, scanned: true, loadedAt: new Date(), loadedBy: session.sub })
-    .onConflictDoNothing();
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(batchCargos)
+      .values({ batchId, cargoId })
+      .onConflictDoNothing();
+    // Kutilayotgan manifest: shu yukning har bir karobkasi uchun bitta qator.
+    const boxes = await tx
+      .select({ id: cargoBoxes.id })
+      .from(cargoBoxes)
+      .where(eq(cargoBoxes.cargoId, cargoId));
+    if (boxes.length) {
+      await tx
+        .insert(batchBoxes)
+        .values(boxes.map((bx) => ({ batchId, boxId: bx.id, cargoId })))
+        .onConflictDoNothing();
+    }
+  });
 }
 
 export async function removeCargoFromBatch(batchId: string, cargoId: string) {
   await requireAny(["tms.manage", "tms.load"]);
   await assertPlannable(batchId);
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(batchBoxes)
+      .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.cargoId, cargoId)));
+    await tx
+      .delete(batchCargos)
+      .where(and(eq(batchCargos.batchId, batchId), eq(batchCargos.cargoId, cargoId)));
+  });
+}
+
+// ─── Scan: yuklash (chiqish) va tushirish (qabul) ────────────────────────────
+
+/** Bitta karobka etiketkasidan olingan "human" yorlig'i. */
+async function boxLabel(boxId: string, done: number, total: number) {
+  const row = await db
+    .select({
+      product: cargoLines.productName,
+      clientCode: clients.code,
+    })
+    .from(cargoBoxes)
+    .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
+    .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .where(eq(cargoBoxes.id, boxId))
+    .limit(1);
+  const r = row[0];
+  return r ? `${r.clientCode} · ${r.product} · ${done}/${total}` : undefined;
+}
+
+async function loadProgress(batchId: string) {
+  const [tot] = await db
+    .select({ total: count() })
+    .from(batchBoxes)
+    .where(eq(batchBoxes.batchId, batchId));
+  const [ld] = await db
+    .select({ done: count() })
+    .from(batchBoxes)
+    .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
+  return { done: ld.done, total: tot.total };
+}
+
+async function unloadProgress(batchId: string) {
+  const [tot] = await db
+    .select({ total: count() })
+    .from(batchBoxes)
+    .where(eq(batchBoxes.batchId, batchId));
+  const [ul] = await db
+    .select({ done: count() })
+    .from(batchBoxes)
+    .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.unloadedScan, true)));
+  return { done: ul.done, total: tot.total };
+}
+
+/** Yuklash scani: karobka QR kodini scan qiladi (kamera/skaner/qo'lda). */
+export async function scanLoad(batchId: string, code: string): Promise<ScanResult> {
+  const session = await requireAny(["tms.manage", "tms.load"]);
+  const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
+  if (!b) throw new Error("NOT_FOUND");
+  assertWarehouseScope(session, b.originWarehouseId);
+  if (b.status !== "planned" && b.status !== "loading") {
+    return { outcome: "wrong_status", code };
+  }
+
+  // Shu partiya manifestidagi karobkani QR bo'yicha topamiz:
+  const rows = await db
+    .select({ bbId: batchBoxes.id, boxId: batchBoxes.boxId, loaded: batchBoxes.loadedScan })
+    .from(batchBoxes)
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .where(and(eq(batchBoxes.batchId, batchId), eq(cargoBoxes.qrCode, code)))
+    .limit(1);
+  const hit = rows[0];
+
+  if (!hit) {
+    const known = await db.query.cargoBoxes.findFirst({ where: eq(cargoBoxes.qrCode, code) });
+    return { outcome: known ? "not_on_plan" : "unknown", code };
+  }
+  if (hit.loaded) {
+    const p = await loadProgress(batchId);
+    return { outcome: "duplicate", code, done: p.done, total: p.total };
+  }
+
   await db
-    .delete(batchCargos)
-    .where(and(eq(batchCargos.batchId, batchId), eq(batchCargos.cargoId, cargoId)));
+    .update(batchBoxes)
+    .set({ loadedScan: true, loadedAt: new Date(), loadedBy: session.sub, flag: null })
+    .where(eq(batchBoxes.id, hit.bbId));
+  if (b.status === "planned") {
+    await db.update(batches).set({ status: "loading", updatedAt: new Date() }).where(eq(batches.id, batchId));
+  }
+
+  const p = await loadProgress(batchId);
+  return { outcome: "loaded", code, done: p.done, total: p.total, label: await boxLabel(hit.boxId, p.done, p.total) };
+}
+
+/** Tushirish scani: manzilda karobkani scan qiladi (manifestga taqqoslaydi). */
+export async function scanUnload(batchId: string, code: string): Promise<ScanResult> {
+  const session = await requireAny(["tms.manage", "tms.load"]);
+  const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
+  if (!b) throw new Error("NOT_FOUND");
+  assertWarehouseScope(session, b.destinationWarehouseId);
+  if (b.status !== "departed" && b.status !== "arrived") {
+    return { outcome: "wrong_status", code };
+  }
+
+  const rows = await db
+    .select({ bbId: batchBoxes.id, boxId: batchBoxes.boxId, unloaded: batchBoxes.unloadedScan })
+    .from(batchBoxes)
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .where(and(eq(batchBoxes.batchId, batchId), eq(cargoBoxes.qrCode, code)))
+    .limit(1);
+  const hit = rows[0];
+
+  if (!hit) {
+    // Manifestda yo'q: ortiqcha (boshqa partiya karobkasi) yoki noma'lum.
+    const known = await db.query.cargoBoxes.findFirst({ where: eq(cargoBoxes.qrCode, code) });
+    return { outcome: known ? "extra" : "unknown", code };
+  }
+  if (hit.unloaded) {
+    const p = await unloadProgress(batchId);
+    return { outcome: "duplicate", code, done: p.done, total: p.total };
+  }
+
+  await db
+    .update(batchBoxes)
+    .set({ unloadedScan: true, unloadedAt: new Date(), unloadedBy: session.sub, flag: null })
+    .where(eq(batchBoxes.id, hit.bbId));
+
+  const p = await unloadProgress(batchId);
+  return { outcome: "unloaded", code, done: p.done, total: p.total, label: await boxLabel(hit.boxId, p.done, p.total) };
 }
 
 // ─── Holat o'tishlari ────────────────────────────────────────────────────────
@@ -463,6 +650,13 @@ export async function departBatch(batchId: string) {
     .innerJoin(cargos, eq(batchCargos.cargoId, cargos.id))
     .where(eq(batchCargos.batchId, batchId));
   if (items.length === 0) throw new Error("EMPTY_BATCH");
+
+  // Har karobka scan qilingan bo'lishi SHART — aks holda jo'natilmaydi.
+  const prog = await loadProgress(batchId);
+  if (prog.total === 0) throw new Error("EMPTY_BATCH");
+  if (prog.done < prog.total) {
+    throw new Error(`LOAD_INCOMPLETE:${prog.done}:${prog.total}`);
+  }
 
   await db.transaction(async (tx) => {
     for (const it of items) {
@@ -525,7 +719,23 @@ export async function unloadBatch(batchId: string) {
     .innerJoin(cargos, eq(batchCargos.cargoId, cargos.id))
     .where(eq(batchCargos.batchId, batchId));
 
+  // Qabulda scan qilinmay qolgan karobkalar = yo'lda yo'qolgan (missing).
+  // Har yuk bo'yicha nechta yetishmayotganini sanaymiz (exception uchun).
+  const missingRows = await db
+    .select({ cargoId: batchBoxes.cargoId, n: count() })
+    .from(batchBoxes)
+    .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.unloadedScan, false)))
+    .groupBy(batchBoxes.cargoId);
+  const missingByCargo = new Map(missingRows.map((r) => [r.cargoId, r.n]));
+  const totalMissing = missingRows.reduce((s, r) => s + r.n, 0);
+
   await db.transaction(async (tx) => {
+    // Yetishmagan karobkalarni belgilaymiz.
+    await tx
+      .update(batchBoxes)
+      .set({ flag: "missing" })
+      .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.unloadedScan, false)));
+
     for (const it of items) {
       await tx
         .update(cargos)
@@ -539,6 +749,17 @@ export async function unloadBatch(batchId: string) {
         data: { batch: b.code, warehouse: dest.code },
         userId: session.sub,
       });
+      // Kamomad bo'lsa — alohida istisno hodisasi (logistga signal uchun).
+      const miss = missingByCargo.get(it.cargoId);
+      if (miss) {
+        await tx.insert(cargoEvents).values({
+          cargoId: it.cargoId,
+          type: "shortage",
+          data: { batch: b.code, warehouse: dest.code, missingBoxes: miss },
+          comment: `Qabulda ${miss} ta karobka yetishmadi`,
+          userId: session.sub,
+        });
+      }
     }
     await tx
       .update(batches)
@@ -556,7 +777,7 @@ export async function unloadBatch(batchId: string) {
     action: "unload",
     entity: "batch",
     entityId: batchId,
-    payload: { code: b.code, warehouse: dest.code, cargos: items.length },
+    payload: { code: b.code, warehouse: dest.code, cargos: items.length, missingBoxes: totalMissing },
   });
 }
 

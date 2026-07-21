@@ -15,7 +15,7 @@ import {
   cargoBoxes,
   cargoEvents,
 } from "./schema";
-import { letterCodeForIndex, buildBoxCode } from "../modules/cargo/box-code";
+import { letterCodeForIndex, buildBoxQr } from "../modules/cargo/box-code";
 
 const DAY = 86_400_000;
 
@@ -89,7 +89,6 @@ async function main() {
     const wh = whByCode.get(whCode);
     if (!wh) continue;
     const clientId = clientIds[ci];
-    const client = CLIENTS[ci];
     const regNumber = `YK-2026-${reg++}`;
 
     // Agar shu reg-raqam bor bo'lsa — o'tkazamiz (idempotent)
@@ -125,7 +124,6 @@ async function main() {
       for (let i = 0; i < lines.length; i++) {
         const [name, n, l, w, h, kg] = lines[i];
         const letter = letterCodeForIndex(i);
-        const qr = buildBoxCode(wh.gsCode, client.code, letter);
         const [line] = await tx
           .insert(cargoLines)
           .values({
@@ -144,7 +142,12 @@ async function main() {
           .returning();
         const boxes = Array.from({ length: n }, () => {
           boxNo += 1;
-          return { cargoId: cargo.id, lineId: line.id, boxNo, qrCode: qr };
+          return {
+            cargoId: cargo.id,
+            lineId: line.id,
+            boxNo,
+            qrCode: buildBoxQr(regNumber, boxNo),
+          };
         });
         await tx.insert(cargoBoxes).values(boxes);
       }

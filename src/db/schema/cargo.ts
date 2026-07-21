@@ -168,10 +168,9 @@ export const cargoBoxes = pgTable(
       .notNull()
       .references(() => cargoLines.id),
     boxNo: integer("box_no").notNull(), // prixod ichida 1..N (ketma-ket, chiziqlar bo'yicha)
-    // Yorliq/QR matni: GS1-GSR0002-A — o'z qatoridagi BARCHA karobkalar bilan
-    // bir xil (harf tovar darajasida beriladi). Global unique EMAS — haqiqiy
-    // unique kalit id. Karobkaning "nechinchi"ligi shu qatordagi tartibi
-    // (boxNo'dan hisoblanadi), alohida ustun sifatida saqlanmaydi.
+    // Har karobkaning UNIKAL QR matni: YK-2026-00006-B037 (reg-raqam + karobka
+    // tartib raqami). Global unique — scan qilinganda aynan bitta karobkaga
+    // ishora qiladi (yuklash/tushirishda har karobka alohida scan qilinadi).
     qrCode: varchar("qr_code", { length: 64 }).notNull(),
     // Qayta upakovkada paddonga biriktiriladi:
     palletId: uuid("pallet_id").references(() => pallets.id),
@@ -181,7 +180,7 @@ export const cargoBoxes = pgTable(
   (t) => [
     index("cargo_box_cargo_idx").on(t.cargoId),
     index("cargo_box_pallet_idx").on(t.palletId),
-    index("cargo_box_qr_idx").on(t.qrCode),
+    unique("cargo_box_qr_uq").on(t.qrCode),
     unique("cargo_box_no_uq").on(t.cargoId, t.boxNo),
   ],
 );

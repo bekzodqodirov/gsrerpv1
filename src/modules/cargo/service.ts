@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { requirePermission } from "@/modules/shared/auth";
 import { nextNumber } from "@/modules/shared/numbering";
-import { letterCodeForIndex, buildBoxCode } from "./box-code";
+import { letterCodeForIndex, buildBoxQr } from "./box-code";
 import {
   receiveCargoSchema,
   computeLineTotals,
@@ -82,7 +82,7 @@ export async function receiveCargo(input: ReceiveCargoInput) {
       })
       .returning();
 
-    await insertLinesAndBoxes(tx, c.id, data.lines, lineTotals, wh.gsCode, client.code);
+    await insertLinesAndBoxes(tx, c.id, regNumber, data.lines, lineTotals);
 
     await tx.insert(cargoEvents).values({
       cargoId: c.id,
@@ -156,7 +156,7 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
       .where(eq(cargos.id, cargoId))
       .returning();
 
-    await insertLinesAndBoxes(tx, c.id, data.lines, lineTotals, wh.gsCode, client.code);
+    await insertLinesAndBoxes(tx, c.id, c.regNumber, data.lines, lineTotals);
 
     await tx.insert(cargoEvents).values({
       cargoId: c.id,
@@ -179,23 +179,20 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
   return cargo;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function insertLinesAndBoxes(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
   cargoId: string,
+  regNumber: string,
   lines: ReceiveCargoInput["lines"],
   lineTotals: ReturnType<typeof computeLineTotals>[],
-  gsCode: string,
-  clientCode: string,
 ) {
   let boxNo = 0;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     const totals = lineTotals[i];
-    // Harf — tovar (qator) darajasida: shu tovarning barcha karobkalari
-    // bir xil harfni oladi.
+    // Harf — tovar (qator) darajasida guruhlash uchun (inson o'qiydi).
     const letterCode = letterCodeForIndex(i);
-    const qrCode = buildBoxCode(gsCode, clientCode, letterCode);
 
     const [line] = await tx
       .insert(cargoLines)
@@ -216,9 +213,15 @@ async function insertLinesAndBoxes(
       })
       .returning();
 
+    // Har karobka — o'z UNIKAL QR kodi bilan (scan qilish uchun).
     const boxRows = Array.from({ length: l.boxCount }, () => {
       boxNo += 1;
-      return { cargoId, lineId: line.id, boxNo, qrCode };
+      return {
+        cargoId,
+        lineId: line.id,
+        boxNo,
+        qrCode: buildBoxQr(regNumber, boxNo),
+      };
     });
     for (let j = 0; j < boxRows.length; j += 500) {
       await tx.insert(cargoBoxes).values(boxRows.slice(j, j + 500));
