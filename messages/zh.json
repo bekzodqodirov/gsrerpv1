@@ -41,6 +41,37 @@
     "codeAuto": "留空则自动生成",
     "codeTaken": "该编码已被占用，请更换。"
   },
+  "cargo": {
+    "title": "货物",
+    "newCargo": "收货",
+    "regNumber": "编号",
+    "client": "客户",
+    "warehouse": "仓库",
+    "pieces": "件数",
+    "weightKg": "重量 (kg)",
+    "volumeM3": "体积 (m³)",
+    "description": "货物描述",
+    "status": "状态",
+    "allStatuses": "全部状态",
+    "receive": "收货",
+    "received": "货物已收，编号：{reg}",
+    "empty": "未找到货物",
+    "saveError": "保存失败，请检查字段。"
+  },
+  "cargoStatus": {
+    "received_cn": "中国仓已收货",
+    "in_transit_ksg": "运往喀什途中",
+    "at_kashgar": "在喀什",
+    "loaded": "已装车",
+    "cn_customs": "出口报关中",
+    "in_transit_uz": "运往乌兹别克斯坦",
+    "at_uz_warehouse": "乌兹仓库",
+    "uz_customs": "进口清关中",
+    "ready": "可发放",
+    "delivered": "已交付",
+    "held": "被扣留",
+    "lost": "丢失"
+  },
   "auth": {
     "title": "登录系统",
     "username": "用户名",

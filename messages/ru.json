@@ -41,6 +41,37 @@
     "codeAuto": "автоматически, если пусто",
     "codeTaken": "Этот код занят — введите другой."
   },
+  "cargo": {
+    "title": "Грузы",
+    "newCargo": "Приём груза",
+    "regNumber": "Номер",
+    "client": "Клиент",
+    "warehouse": "Склад",
+    "pieces": "Мест",
+    "weightKg": "Вес (кг)",
+    "volumeM3": "Объём (м³)",
+    "description": "Описание товара",
+    "status": "Статус",
+    "allStatuses": "Все статусы",
+    "receive": "Принять",
+    "received": "Груз принят. Номер: {reg}",
+    "empty": "Грузы не найдены",
+    "saveError": "Ошибка сохранения. Проверьте поля."
+  },
+  "cargoStatus": {
+    "received_cn": "Принят в Китае",
+    "in_transit_ksg": "В пути в Кашгар",
+    "at_kashgar": "В Кашгаре",
+    "loaded": "Погружен",
+    "cn_customs": "Затаможка",
+    "in_transit_uz": "В пути в Узбекистан",
+    "at_uz_warehouse": "На складе UZ",
+    "uz_customs": "Растаможка",
+    "ready": "Готов к выдаче",
+    "delivered": "Выдан",
+    "held": "Задержан",
+    "lost": "Утерян"
+  },
   "auth": {
     "title": "Вход в систему",
     "username": "Логин",

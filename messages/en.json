@@ -41,6 +41,37 @@
     "codeAuto": "auto if left empty",
     "codeTaken": "This code is taken — choose another."
   },
+  "cargo": {
+    "title": "Cargo",
+    "newCargo": "Receive cargo",
+    "regNumber": "Number",
+    "client": "Client",
+    "warehouse": "Warehouse",
+    "pieces": "Pieces",
+    "weightKg": "Weight (kg)",
+    "volumeM3": "Volume (m³)",
+    "description": "Goods description",
+    "status": "Status",
+    "allStatuses": "All statuses",
+    "receive": "Receive",
+    "received": "Cargo received. Number: {reg}",
+    "empty": "No cargo found",
+    "saveError": "Save failed. Check the fields."
+  },
+  "cargoStatus": {
+    "received_cn": "Received in China",
+    "in_transit_ksg": "In transit to Kashgar",
+    "at_kashgar": "At Kashgar",
+    "loaded": "Loaded",
+    "cn_customs": "CN export customs",
+    "in_transit_uz": "In transit to Uzbekistan",
+    "at_uz_warehouse": "At UZ warehouse",
+    "uz_customs": "UZ import customs",
+    "ready": "Ready for delivery",
+    "delivered": "Delivered",
+    "held": "On hold",
+    "lost": "Lost"
+  },
   "auth": {
     "title": "Sign in",
     "username": "Username",

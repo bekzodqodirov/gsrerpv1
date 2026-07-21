@@ -10,6 +10,8 @@ export type SessionPayload = {
   username: string;
   fullName: string;
   perms: string[]; // huquq kodlari
+  // Biriktirilgan sklad (sklad xodimi uchun); null = cheklovsiz
+  warehouseId: string | null;
 };
 
 function getSecret(): Uint8Array {
@@ -37,6 +39,7 @@ export async function verifySession(
       username: payload.username,
       fullName: payload.fullName,
       perms: payload.perms ?? [],
+      warehouseId: payload.warehouseId ?? null,
     };
   } catch {
     return null;

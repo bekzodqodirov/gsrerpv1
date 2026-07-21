@@ -41,6 +41,37 @@
     "codeAuto": "bo'sh qoldirsangiz avtomatik",
     "codeTaken": "Bu kod band — boshqasini kiriting."
   },
+  "cargo": {
+    "title": "Yuklar",
+    "newCargo": "Yuk qabul qilish",
+    "regNumber": "Raqam",
+    "client": "Mijoz",
+    "warehouse": "Sklad",
+    "pieces": "Joy",
+    "weightKg": "Og'irlik (kg)",
+    "volumeM3": "Hajm (m³)",
+    "description": "Tovar tavsifi",
+    "status": "Holat",
+    "allStatuses": "Barcha holatlar",
+    "receive": "Qabul qilish",
+    "received": "Yuk qabul qilindi. Raqami: {reg}",
+    "empty": "Yuklar topilmadi",
+    "saveError": "Saqlashda xatolik. Maydonlarni tekshiring."
+  },
+  "cargoStatus": {
+    "received_cn": "Xitoyda qabul qilindi",
+    "in_transit_ksg": "Qashqarga yo'lda",
+    "at_kashgar": "Qashqarda",
+    "loaded": "Yuklandi",
+    "cn_customs": "Zatamojkada",
+    "in_transit_uz": "O'zbekistonga yo'lda",
+    "at_uz_warehouse": "UZ skladida",
+    "uz_customs": "Rastamojkada",
+    "ready": "Tarqatishga tayyor",
+    "delivered": "Topshirildi",
+    "held": "Ushlab turilgan",
+    "lost": "Yo'qolgan"
+  },
   "auth": {
     "title": "Tizimga kirish",
     "username": "Login",

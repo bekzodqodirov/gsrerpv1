@@ -45,6 +45,7 @@ export async function login(
     username: user.username,
     fullName: user.fullName,
     perms: [...new Set(rows.map((r) => r.code))],
+    warehouseId: user.warehouseId ?? null,
   };
 
   const token = await signSession(payload);

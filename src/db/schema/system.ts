@@ -8,6 +8,7 @@ import {
   jsonb,
   primaryKey,
 } from "drizzle-orm/pg-core";
+import { warehouses } from "./catalog";
 
 // ─── Foydalanuvchi va huquqlar ───────────────────────────────────────────────
 
@@ -17,6 +18,9 @@ export const users = pgTable("user", {
   fullName: varchar("full_name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).unique(),
   passwordHash: text("password_hash").notNull(),
+  // Sklad xodimi o'z skladiga biriktiriladi: faqat shu sklad yuklarini
+  // kiritadi/ko'radi. null = cheklovsiz (ofis, logist, admin).
+  warehouseId: uuid("warehouse_id").references(() => warehouses.id),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

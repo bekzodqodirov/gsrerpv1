@@ -120,6 +120,22 @@ async function main() {
     .values({ userId: admin.id, roleId: adminRole.id })
     .onConflictDoNothing();
 
+  // Omborchi roli: yuk qabul/ko'rish/harakat + mijozlarni ko'rish
+  const omborchiRole = (await db.query.roles.findFirst({
+    where: eq(roles.code, "omborchi"),
+  }))!;
+  for (const permCode of ["cargo.view", "cargo.receive", "cargo.move", "clients.view"]) {
+    const perm = await db.query.permissions.findFirst({
+      where: eq(permissions.code, permCode),
+    });
+    if (perm) {
+      await db
+        .insert(rolePermissions)
+        .values({ roleId: omborchiRole.id, permissionId: perm.id })
+        .onConflictDoNothing();
+    }
+  }
+
   // Skladlar
   for (const w of WAREHOUSES) {
     const exists = await db.query.warehouses.findFirst({
