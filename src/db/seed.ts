@@ -41,6 +41,8 @@ const PERMISSIONS = [
   { code: "tms.view", description: "Partiya/mashinalarni ko'rish" },
   { code: "tms.manage", description: "Partiya/mashina va narxlarni boshqarish" },
   { code: "tms.load", description: "Mashinaga yuklash/tushirishni tasdiqlash" },
+  { code: "finance.view", description: "Moliyani ko'rish" },
+  { code: "finance.manage", description: "Tarif/invoys/to'lov/xarajatlarni boshqarish" },
 ] as const;
 
 // Skladlar: 4 Xitoy (arenda) + 2 O'zbekiston customs warehouse (namuna)
@@ -145,6 +147,14 @@ async function main() {
       "tms.view",
       "tms.manage",
       "tms.load",
+    ],
+    // Buxgalter: barcha moliya + ko'rish uchun mijoz/yuk/partiya
+    buxgalter: [
+      "clients.view",
+      "cargo.view",
+      "tms.view",
+      "finance.view",
+      "finance.manage",
     ],
   };
   for (const [roleCode, perms] of Object.entries(roleGrants)) {

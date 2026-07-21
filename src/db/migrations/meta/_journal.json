@@ -22,6 +22,13 @@
       "when": 1784663162108,
       "tag": "0002_icy_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784665157871,
+      "tag": "0003_groovy_hiroim",
+      "breakpoints": true
     }
   ]
 }
