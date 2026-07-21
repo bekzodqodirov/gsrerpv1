@@ -89,6 +89,28 @@
     "signIn": "Kirish",
     "invalidCredentials": "Login yoki parol noto'g'ri"
   },
+  "settings": {
+    "users": "Foydalanuvchilar",
+    "usersDesc": "Xodimlarga akkaunt ochish, rol va sklad biriktirish"
+  },
+  "users": {
+    "title": "Foydalanuvchilar",
+    "newUser": "Yangi foydalanuvchi",
+    "username": "Login",
+    "fullName": "F.I.Sh.",
+    "password": "Parol",
+    "role": "Rol",
+    "warehouse": "Sklad",
+    "noWarehouse": "cheklovsiz (ofis)",
+    "status": "Holat",
+    "active": "Faol",
+    "inactive": "Nofaol",
+    "activate": "Faollashtirish",
+    "deactivate": "O'chirish",
+    "created": "Foydalanuvchi yaratildi: {username}",
+    "usernameTaken": "Bu login band — boshqasini kiriting.",
+    "saveError": "Saqlashda xatolik. Maydonlarni tekshiring."
+  },
   "home": {
     "title": "GSR ERP tizimi",
     "welcome": "Xush kelibsiz, {name}!",

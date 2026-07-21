@@ -89,6 +89,28 @@
     "signIn": "Sign in",
     "invalidCredentials": "Invalid username or password"
   },
+  "settings": {
+    "users": "Users",
+    "usersDesc": "Create staff accounts, assign roles and warehouses"
+  },
+  "users": {
+    "title": "Users",
+    "newUser": "New user",
+    "username": "Username",
+    "fullName": "Full name",
+    "password": "Password",
+    "role": "Role",
+    "warehouse": "Warehouse",
+    "noWarehouse": "unrestricted (office)",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "created": "User created: {username}",
+    "usernameTaken": "This username is taken — choose another.",
+    "saveError": "Save failed. Check the fields."
+  },
   "home": {
     "title": "GSR ERP System",
     "welcome": "Welcome, {name}!",

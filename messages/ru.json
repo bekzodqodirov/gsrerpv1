@@ -89,6 +89,28 @@
     "signIn": "Войти",
     "invalidCredentials": "Неверный логин или пароль"
   },
+  "settings": {
+    "users": "Пользователи",
+    "usersDesc": "Создание аккаунтов, назначение ролей и складов"
+  },
+  "users": {
+    "title": "Пользователи",
+    "newUser": "Новый пользователь",
+    "username": "Логин",
+    "fullName": "Ф.И.О.",
+    "password": "Пароль",
+    "role": "Роль",
+    "warehouse": "Склад",
+    "noWarehouse": "без ограничений (офис)",
+    "status": "Статус",
+    "active": "Активен",
+    "inactive": "Неактивен",
+    "activate": "Активировать",
+    "deactivate": "Отключить",
+    "created": "Пользователь создан: {username}",
+    "usernameTaken": "Этот логин занят — введите другой.",
+    "saveError": "Ошибка сохранения. Проверьте поля."
+  },
   "home": {
     "title": "Система GSR ERP",
     "welcome": "Добро пожаловать, {name}!",
