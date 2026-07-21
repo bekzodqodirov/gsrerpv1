@@ -15,12 +15,29 @@
   },
   "nav": {
     "dashboard": "Bosh sahifa",
-    "inventory": "Ombor",
-    "sales": "Savdo",
+    "cargo": "Yuklar",
+    "clients": "Mijozlar",
     "finance": "Moliya",
     "hr": "Xodimlar",
     "settings": "Sozlamalar",
     "logout": "Chiqish"
+  },
+  "clients": {
+    "title": "Mijozlar",
+    "newClient": "Yangi mijoz",
+    "code": "Kod",
+    "name": "Ism / firma",
+    "phone": "Telefon",
+    "city": "Shahar",
+    "creditLimit": "Qarz limiti (USD)",
+    "noCredit": "qarz yo'q",
+    "note": "Izoh",
+    "status": "Holat",
+    "active": "Faol",
+    "inactive": "Nofaol",
+    "empty": "Mijozlar topilmadi",
+    "created": "Mijoz yaratildi. Kodi: {code}",
+    "saveError": "Saqlashda xatolik. Maydonlarni tekshiring."
   },
   "auth": {
     "title": "Tizimga kirish",

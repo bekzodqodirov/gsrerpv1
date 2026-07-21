@@ -5,7 +5,16 @@ import "dotenv/config";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "./index";
-import { users, roles, permissions, userRoles, rolePermissions } from "./schema";
+import {
+  users,
+  roles,
+  permissions,
+  userRoles,
+  rolePermissions,
+  warehouses,
+  currencies,
+  docSequences,
+} from "./schema";
 
 const ROLES = [
   { code: "admin", name: "Administrator" },
@@ -22,6 +31,33 @@ const PERMISSIONS = [
   { code: "*", description: "Barcha huquqlar" },
   { code: "settings.users.manage", description: "Foydalanuvchilarni boshqarish" },
   { code: "settings.roles.manage", description: "Rollarni boshqarish" },
+  { code: "clients.view", description: "Mijozlarni ko'rish" },
+  { code: "clients.manage", description: "Mijozlarni boshqarish" },
+  { code: "cargo.view", description: "Yuklarni ko'rish" },
+  { code: "cargo.receive", description: "Yuk qabul qilish" },
+  { code: "cargo.move", description: "Yuk holatini o'zgartirish" },
+] as const;
+
+// Skladlar: 4 Xitoy (arenda) + 2 O'zbekiston customs warehouse (namuna)
+const WAREHOUSES = [
+  { code: "YIWU", name: "Yiwu skladi", country: "CN", city: "Yiwu", kind: "receiving" },
+  { code: "GZ", name: "Guangzhou skladi", country: "CN", city: "Guangzhou", kind: "receiving" },
+  { code: "URC", name: "Urumchi skladi", country: "CN", city: "Urumqi", kind: "receiving" },
+  { code: "KSG", name: "Qashqar skladi", country: "CN", city: "Kashgar", kind: "consolidation" },
+  { code: "TAS", name: "Toshkent customs warehouse", country: "UZ", city: "Toshkent", kind: "customs" },
+  { code: "AND", name: "Andijon customs warehouse", country: "UZ", city: "Andijon", kind: "customs" },
+] as const;
+
+const CURRENCIES = [
+  { code: "USD", name: "AQSH dollari" },
+  { code: "CNY", name: "Xitoy yuani" },
+  { code: "UZS", name: "O'zbek so'mi" },
+] as const;
+
+// Hujjat raqamlagichlar
+const SEQUENCES = [
+  { docType: "client", prefix: "GSR" }, // mijoz kodi: GSR-0001
+  { docType: "cargo", prefix: "YK" }, //   yuk partiyasi: YK-2026-00001
 ] as const;
 
 const ADMIN = {
@@ -83,6 +119,28 @@ async function main() {
     .insert(userRoles)
     .values({ userId: admin.id, roleId: adminRole.id })
     .onConflictDoNothing();
+
+  // Skladlar
+  for (const w of WAREHOUSES) {
+    const exists = await db.query.warehouses.findFirst({
+      where: eq(warehouses.code, w.code),
+    });
+    if (!exists) {
+      await db.insert(warehouses).values(w);
+      console.log(`+ sklad: ${w.code}`);
+    }
+  }
+
+  // Valyutalar
+  for (const c of CURRENCIES) {
+    await db.insert(currencies).values(c).onConflictDoNothing();
+  }
+  console.log("+ valyutalar: USD, CNY, UZS");
+
+  // Raqamlagichlar
+  for (const s of SEQUENCES) {
+    await db.insert(docSequences).values(s).onConflictDoNothing();
+  }
 
   console.log("Seed tugadi.");
   process.exit(0);

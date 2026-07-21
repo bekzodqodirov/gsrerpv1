@@ -6,8 +6,8 @@ import { logoutAction } from "./actions";
 
 const NAV_ITEMS = [
   { key: "dashboard", href: "/" },
-  { key: "inventory", href: "/inventory" },
-  { key: "sales", href: "/sales" },
+  { key: "cargo", href: "/cargo" },
+  { key: "clients", href: "/clients" },
   { key: "finance", href: "/finance" },
   { key: "hr", href: "/hr" },
   { key: "settings", href: "/settings" },

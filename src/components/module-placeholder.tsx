@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 export async function ModulePlaceholder({
   navKey,
 }: {
-  navKey: "inventory" | "sales" | "finance" | "hr" | "settings";
+  navKey: "cargo" | "clients" | "finance" | "hr" | "settings";
 }) {
   const nav = await getTranslations("nav");
   const t = await getTranslations("common");

@@ -15,12 +15,29 @@
   },
   "nav": {
     "dashboard": "首页",
-    "inventory": "仓库",
-    "sales": "销售",
+    "cargo": "货物",
+    "clients": "客户",
     "finance": "财务",
     "hr": "人事",
     "settings": "设置",
     "logout": "退出登录"
+  },
+  "clients": {
+    "title": "客户",
+    "newClient": "新客户",
+    "code": "编码",
+    "name": "姓名 / 公司",
+    "phone": "电话",
+    "city": "城市",
+    "creditLimit": "欠款额度 (USD)",
+    "noCredit": "不允许欠款",
+    "note": "备注",
+    "status": "状态",
+    "active": "有效",
+    "inactive": "停用",
+    "empty": "未找到客户",
+    "created": "客户已创建，编码：{code}",
+    "saveError": "保存失败，请检查字段。"
   },
   "auth": {
     "title": "登录系统",

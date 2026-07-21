@@ -15,12 +15,29 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "inventory": "Inventory",
-    "sales": "Sales",
+    "cargo": "Cargo",
+    "clients": "Clients",
     "finance": "Finance",
     "hr": "HR",
     "settings": "Settings",
     "logout": "Sign out"
+  },
+  "clients": {
+    "title": "Clients",
+    "newClient": "New client",
+    "code": "Code",
+    "name": "Name / company",
+    "phone": "Phone",
+    "city": "City",
+    "creditLimit": "Credit limit (USD)",
+    "noCredit": "no credit",
+    "note": "Note",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "empty": "No clients found",
+    "created": "Client created. Code: {code}",
+    "saveError": "Save failed. Check the fields."
   },
   "auth": {
     "title": "Sign in",
