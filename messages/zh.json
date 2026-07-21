@@ -10,7 +10,8 @@
     "search": "搜索",
     "actions": "操作",
     "yes": "是",
-    "no": "否"
+    "no": "否",
+    "comingSoon": "该模块即将上线"
   },
   "nav": {
     "dashboard": "首页",
@@ -18,10 +19,19 @@
     "sales": "销售",
     "finance": "财务",
     "hr": "人事",
-    "settings": "设置"
+    "settings": "设置",
+    "logout": "退出登录"
+  },
+  "auth": {
+    "title": "登录系统",
+    "username": "用户名",
+    "password": "密码",
+    "signIn": "登录",
+    "invalidCredentials": "用户名或密码错误"
   },
   "home": {
     "title": "GSR ERP 系统",
+    "welcome": "欢迎，{name}！",
     "subtitle": "企业管理：仓库、销售、财务与人事 — 一站式平台"
   }
 }

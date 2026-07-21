@@ -10,7 +10,8 @@
     "search": "Qidirish",
     "actions": "Amallar",
     "yes": "Ha",
-    "no": "Yo'q"
+    "no": "Yo'q",
+    "comingSoon": "Bu bo'lim tez orada ishga tushadi"
   },
   "nav": {
     "dashboard": "Bosh sahifa",
@@ -18,10 +19,19 @@
     "sales": "Savdo",
     "finance": "Moliya",
     "hr": "Xodimlar",
-    "settings": "Sozlamalar"
+    "settings": "Sozlamalar",
+    "logout": "Chiqish"
+  },
+  "auth": {
+    "title": "Tizimga kirish",
+    "username": "Login",
+    "password": "Parol",
+    "signIn": "Kirish",
+    "invalidCredentials": "Login yoki parol noto'g'ri"
   },
   "home": {
     "title": "GSR ERP tizimi",
+    "welcome": "Xush kelibsiz, {name}!",
     "subtitle": "Korxona boshqaruvi: ombor, savdo, moliya va xodimlar — bir joyda"
   }
 }
