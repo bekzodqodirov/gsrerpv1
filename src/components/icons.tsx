@@ -99,6 +99,12 @@ export const icons = {
       <path d="M7 14h10v7H7z" />
     </Icon>
   ),
+  camera: (c?: string) => (
+    <Icon className={c}>
+      <path d="M4 8h3l1.6-2.2A1 1 0 019.4 5.3h5.2a1 1 0 01.8.5L17 8h3a1.5 1.5 0 011.5 1.5v9A1.5 1.5 0 0120 20H4a1.5 1.5 0 01-1.5-1.5v-9A1.5 1.5 0 014 8z" />
+      <circle cx="12" cy="13.5" r="3.4" />
+    </Icon>
+  ),
   qr: (c?: string) => (
     <Icon className={c}>
       <rect x="3" y="3" width="7" height="7" rx="1" />

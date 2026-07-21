@@ -1,6 +1,11 @@
+import { Fragment } from "react";
 import { getTranslations } from "next-intl/server";
 import { getSession } from "@/modules/shared/auth";
-import { listCargos, getReceiveFormData } from "@/modules/cargo/service";
+import {
+  listCargos,
+  listCargoLines,
+  getReceiveFormData,
+} from "@/modules/cargo/service";
 import { cargoStatuses, type CargoStatus } from "@/modules/cargo/dto";
 import { Link } from "@/i18n/routing";
 import {
@@ -35,8 +40,9 @@ export default async function CargoPage({
     ? (status as CargoStatus)
     : undefined;
 
-  const [rows, formData] = await Promise.all([
+  const [rows, lineRows, formData] = await Promise.all([
     listCargos({ q, status: validStatus }),
+    listCargoLines({ q, status: validStatus }),
     getReceiveFormData(),
   ]);
 
@@ -81,6 +87,7 @@ export default async function CargoPage({
         />
       </CollapsibleCard>
 
+      {/* Prixodlar (yuklar) — yig'indi bo'yicha */}
       <TableWrap>
         <thead className="bg-surface-2/60">
           <tr>
@@ -130,6 +137,91 @@ export default async function CargoPage({
           ))}
         </tbody>
       </TableWrap>
+
+      {/* Tovarlar — qatorlar, bir prixodga tegishlilari guruhlab ko'rsatiladi */}
+      <div>
+        <h2 className="mb-2 text-[11px] font-bold tracking-wider text-muted uppercase">
+          {t("productsSection")}
+        </h2>
+        <TableWrap>
+          <thead className="bg-surface-2/60">
+            <tr>
+              <Th>{t("photo")}</Th>
+              <Th>{t("product")}</Th>
+              <Th className="text-right">{t("boxCount")}</Th>
+              <Th className="text-right">{t("totalWeight")}</Th>
+              <Th className="text-right">{t("totalVolume")}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineRows.length === 0 && <EmptyRow colSpan={5} text={t("empty")} />}
+            {(() => {
+              let lastReg: string | null = null;
+              return lineRows.map((r) => {
+                const isNewGroup = r.regNumber !== lastReg;
+                lastReg = r.regNumber;
+                return (
+                  <Fragment key={r.lineId}>
+                    {isNewGroup && (
+                      <tr className="border-t border-line bg-surface-2/60">
+                        <td colSpan={5} className="px-4 py-1.5">
+                          <Link
+                            href={`/cargo/${r.cargoId}`}
+                            className="font-mono text-xs font-bold text-primary hover:underline"
+                          >
+                            {r.regNumber}
+                          </Link>
+                          <span className="ml-2 font-mono text-xs font-semibold text-muted">
+                            {r.clientCode}
+                          </span>
+                          <span className="ml-1.5 hidden text-xs text-muted sm:inline">
+                            {r.clientName}
+                          </span>
+                          <span className="ml-2 text-xs text-muted">
+                            {r.receivedAt.toISOString().slice(0, 10)}
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                    <TRow>
+                      <Td>
+                        {r.photoId ? (
+                          <a
+                            href={`/api/files/${r.photoId}`}
+                            target="_blank"
+                            className="block h-10 w-10 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/files/${r.photoId}`}
+                              alt={r.productName}
+                              className="h-full w-full object-cover"
+                            />
+                          </a>
+                        ) : (
+                          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted">
+                            {icons.camera("h-4 w-4")}
+                          </span>
+                        )}
+                      </Td>
+                      <Td className="font-medium">{r.productName}</Td>
+                      <Td className="text-right font-mono tabular-nums">
+                        {r.boxCount}
+                      </Td>
+                      <Td className="text-right font-mono tabular-nums">
+                        {r.totalWeightKg}
+                      </Td>
+                      <Td className="text-right font-mono tabular-nums">
+                        {r.totalVolumeM3}
+                      </Td>
+                    </TRow>
+                  </Fragment>
+                );
+              });
+            })()}
+          </tbody>
+        </TableWrap>
+      </div>
     </div>
   );
 }

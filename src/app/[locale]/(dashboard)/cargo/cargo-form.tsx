@@ -3,7 +3,9 @@
 import { useActionState, useRef, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button, Input, Select, Field, controlCls, cn } from "@/components/ui";
+import { icons } from "@/components/icons";
 import { receiveCargoAction, type CargoFormState } from "./actions";
+import { translateProductNameAction } from "./translate-action";
 
 type Option = { id: string; code: string; name: string };
 
@@ -63,6 +65,39 @@ function linePreview(l: Line): { kg: number; m3: number } | null {
   return kg || m3 ? { kg, m3 } : null;
 }
 
+/** Kichik, kamtarona "rasm qo'shish" tugmasi — to'liq inputga qaraganda ancha ixcham. */
+function PhotoPicker({ name, label }: { name: string; label: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [count, setCount] = useState(0);
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        ref={inputRef}
+        name={name}
+        type="file"
+        multiple
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => setCount(e.target.files?.length ?? 0)}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        {icons.camera("h-3.5 w-3.5")}
+        {label}
+        {count > 0 && (
+          <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+            {count}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function CargoForm({
   clients,
   warehouses,
@@ -76,6 +111,7 @@ export function CargoForm({
   const tc = useTranslations("common");
   const formRef = useRef<HTMLFormElement>(null);
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
+  const [translatingIdx, setTranslatingIdx] = useState<number | null>(null);
   const [state, formAction, pending] = useActionState<CargoFormState, FormData>(
     receiveCargoAction,
     {},
@@ -90,6 +126,18 @@ export function CargoForm({
 
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((prev) => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
+  async function handleProductBlur(i: number) {
+    const name = lines[i].productName;
+    // Allaqachon tarjima qo'shilgan bo'lsa (qavs bor) — qayta urinmaymiz
+    if (!name.trim() || name.includes("(")) return;
+    setTranslatingIdx(i);
+    const translated = await translateProductNameAction(name);
+    setTranslatingIdx(null);
+    if (translated) {
+      setLine(i, { productName: `${name} (${translated})` });
+    }
+  }
 
   const fixedWarehouse = fixedWarehouseId
     ? warehouses.find((w) => w.id === fixedWarehouseId)
@@ -167,7 +215,7 @@ export function CargoForm({
         </Field>
       </div>
 
-      {/* Qatorlar: har xil tovar alohida */}
+      {/* Qatorlar: har xil tovar alohida. Tartib: nomi -> soni -> o'lcham/og'irlik -> rasm (oxirida). */}
       <div className="mt-5 space-y-4">
         {lines.map((l, i) => {
           const preview = linePreview(l);
@@ -204,126 +252,132 @@ export function CargoForm({
                 </div>
               </div>
 
-              <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Field
-                  label={t("product")}
-                  required
-                  className="sm:col-span-2"
-                >
-                  <Input
-                    required
-                    value={l.productName}
-                    onChange={(e) =>
-                      setLine(i, { productName: e.target.value })
-                    }
-                  />
-                </Field>
-
-                <Field label={t("boxCount")} required>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    inputMode="numeric"
-                    required
-                    value={l.boxCount}
-                    onChange={(e) => setLine(i, { boxCount: e.target.value })}
-                  />
-                </Field>
-
-                <Field label={t("linePhotos")}>
-                  <input
-                    name={`linePhotos_${i}`}
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    className={cn(
-                      controlCls,
-                      "file:mr-3 file:h-full file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-primary",
-                      "flex items-center py-0",
+              <div className="mt-3 space-y-4">
+                {/* 1. Tovar nomi (xitoycha kiritilsa, chetga chiqqach ruscha tarjima qavsda qo'shiladi) */}
+                <Field label={t("product")} required>
+                  <div className="relative">
+                    <Input
+                      required
+                      value={l.productName}
+                      onChange={(e) =>
+                        setLine(i, { productName: e.target.value })
+                      }
+                      onBlur={() => handleProductBlur(i)}
+                    />
+                    {translatingIdx === i && (
+                      <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">
+                        {t("translating")}
+                      </span>
                     )}
-                  />
+                  </div>
                 </Field>
 
-                {l.manual ? (
-                  <>
-                    <Field label={t("totalWeight")} required>
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="0.001"
-                        inputMode="decimal"
-                        required
-                        value={l.totalWeightKg}
-                        onChange={(e) =>
-                          setLine(i, { totalWeightKg: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field label={t("totalVolume")} required>
-                      <Input
-                        type="number"
-                        min="0.0001"
-                        step="0.0001"
-                        inputMode="decimal"
-                        required
-                        value={l.totalVolumeM3}
-                        onChange={(e) =>
-                          setLine(i, { totalVolumeM3: e.target.value })
-                        }
-                      />
-                    </Field>
-                  </>
-                ) : (
-                  <>
-                    <Field label={t("boxDims")} required className="sm:col-span-2">
-                      <div className="flex items-center gap-1.5">
-                        {(
-                          ["boxLengthCm", "boxWidthCm", "boxHeightCm"] as const
-                        ).map((k, di) => (
-                          <span key={k} className="flex flex-1 items-center gap-1.5">
-                            {di > 0 && (
-                              <span className="text-xs text-muted">×</span>
-                            )}
-                            <Input
-                              type="number"
-                              min="0.1"
-                              step="0.1"
-                              inputMode="decimal"
-                              required
-                              value={l[k]}
-                              onChange={(e) =>
-                                setLine(i, { [k]: e.target.value })
-                              }
-                              className="min-w-0 px-2 text-center"
-                            />
-                          </span>
-                        ))}
-                      </div>
-                    </Field>
-                    <Field label={t("weightPerBox")} required>
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="0.001"
-                        inputMode="decimal"
-                        required
-                        value={l.weightPerBoxKg}
-                        onChange={(e) =>
-                          setLine(i, { weightPerBoxKg: e.target.value })
-                        }
-                      />
-                    </Field>
-                  </>
-                )}
-              </div>
+                {/* 2. Soni -> o'lcham/og'irlik — ketma-ket */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label={t("boxCount")} required>
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      required
+                      value={l.boxCount}
+                      onChange={(e) =>
+                        setLine(i, { boxCount: e.target.value })
+                      }
+                    />
+                  </Field>
 
-              {preview && (
-                <p className="mt-3 text-xs font-medium text-muted">
-                  = {preview.kg ? `${+preview.kg.toFixed(3)} kg` : "—"} ·{" "}
-                  {preview.m3 ? `${+preview.m3.toFixed(4)} m³` : "—"}
-                </p>
-              )}
+                  {l.manual ? (
+                    <>
+                      <Field label={t("totalWeight")} required>
+                        <Input
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          inputMode="decimal"
+                          required
+                          value={l.totalWeightKg}
+                          onChange={(e) =>
+                            setLine(i, { totalWeightKg: e.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label={t("totalVolume")} required>
+                        <Input
+                          type="number"
+                          min="0.0001"
+                          step="0.0001"
+                          inputMode="decimal"
+                          required
+                          value={l.totalVolumeM3}
+                          onChange={(e) =>
+                            setLine(i, { totalVolumeM3: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </>
+                  ) : (
+                    <>
+                      <Field label={t("boxDims")} required className="lg:col-span-2">
+                        <div className="flex items-center gap-1.5">
+                          {(
+                            ["boxLengthCm", "boxWidthCm", "boxHeightCm"] as const
+                          ).map((k, di) => (
+                            <span
+                              key={k}
+                              className="flex flex-1 items-center gap-1.5"
+                            >
+                              {di > 0 && (
+                                <span className="text-xs text-muted">×</span>
+                              )}
+                              <Input
+                                type="number"
+                                min="0.1"
+                                step="0.1"
+                                inputMode="decimal"
+                                required
+                                value={l[k]}
+                                onChange={(e) =>
+                                  setLine(i, { [k]: e.target.value })
+                                }
+                                className="min-w-0 px-2 text-center"
+                              />
+                            </span>
+                          ))}
+                        </div>
+                      </Field>
+                      <Field label={t("weightPerBox")} required>
+                        <Input
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          inputMode="decimal"
+                          required
+                          value={l.weightPerBoxKg}
+                          onChange={(e) =>
+                            setLine(i, { weightPerBoxKg: e.target.value })
+                          }
+                        />
+                      </Field>
+                    </>
+                  )}
+                </div>
+
+                {/* 3. Rasm — oxirida, kichik tugma */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <PhotoPicker
+                    name={`linePhotos_${i}`}
+                    label={t("linePhotos")}
+                  />
+                  {preview && (
+                    <span className="font-mono text-xs font-medium text-muted tabular-nums">
+                      = {preview.kg ? `${+preview.kg.toFixed(3)} kg` : "—"} ·{" "}
+                      {preview.m3 ? `${+preview.m3.toFixed(4)} m³` : "—"}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           );
         })}

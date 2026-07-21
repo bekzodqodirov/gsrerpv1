@@ -1,6 +1,6 @@
 // Yuk servisi: ko'p qatorli qabul, karobka QR kodlari, ro'yxat, tafsilot.
 // Sklad xodimi (session.warehouseId bor) faqat o'z skladida ishlaydi.
-import { and, asc, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   cargos,
@@ -10,6 +10,7 @@ import {
   clients,
   warehouses,
   auditLog,
+  attachments,
 } from "@/db/schema";
 import { requirePermission } from "@/modules/shared/auth";
 import { nextNumber } from "@/modules/shared/numbering";
@@ -205,6 +206,82 @@ export async function getCargo(id: string) {
   });
 
   return { ...row, lines };
+}
+
+/**
+ * Tovarlar ro'yxati (qatorlar), prixod bo'yicha guruhlash uchun mo'ljallangan:
+ * bir xil regNumber ostidagi qatorlar ketma-ket keladi, har biriga birinchi
+ * rasm biriktirilgan bo'lsa shu ham qaytariladi.
+ */
+export async function listCargoLines(filter: CargoListFilter = {}) {
+  const session = await requirePermission("cargo.view");
+
+  const conds = [eq(cargos.voided, false)];
+  if (session.warehouseId) {
+    conds.push(eq(cargos.currentWarehouseId, session.warehouseId));
+  }
+  if (filter.status) {
+    conds.push(eq(cargos.status, filter.status));
+  }
+  if (filter.q) {
+    const q = `%${filter.q}%`;
+    conds.push(
+      or(
+        ilike(cargos.regNumber, q),
+        ilike(clients.code, q),
+        ilike(clients.name, q),
+        ilike(cargoLines.productName, q),
+      )!,
+    );
+  }
+
+  const rows = await db
+    .select({
+      cargoId: cargos.id,
+      regNumber: cargos.regNumber,
+      status: cargos.status,
+      receivedAt: cargos.receivedAt,
+      clientCode: clients.code,
+      clientName: clients.name,
+      lineId: cargoLines.id,
+      lineNo: cargoLines.lineNo,
+      productName: cargoLines.productName,
+      boxCount: cargoLines.boxCount,
+      totalWeightKg: cargoLines.totalWeightKg,
+      totalVolumeM3: cargoLines.totalVolumeM3,
+    })
+    .from(cargoLines)
+    .innerJoin(cargos, eq(cargoLines.cargoId, cargos.id))
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .where(and(...conds))
+    .orderBy(desc(cargos.createdAt), asc(cargoLines.lineNo))
+    .limit(500);
+
+  // Har qatorning birinchi rasmi — bitta so'rovda (N+1'dan qochish)
+  const lineIds = rows.map((r) => r.lineId);
+  const photoRows = lineIds.length
+    ? await db
+        .select({ entityId: attachments.entityId, id: attachments.id })
+        .from(attachments)
+        .where(
+          and(
+            eq(attachments.entity, "cargo_line"),
+            inArray(attachments.entityId, lineIds),
+          ),
+        )
+        .orderBy(asc(attachments.createdAt))
+    : [];
+  const firstPhotoByLine = new Map<string, string>();
+  for (const p of photoRows) {
+    if (!firstPhotoByLine.has(p.entityId)) {
+      firstPhotoByLine.set(p.entityId, p.id);
+    }
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    photoId: firstPhotoByLine.get(r.lineId) ?? null,
+  }));
 }
 
 /** QR yorliqlar uchun: prixodning barcha karobkalari. */
