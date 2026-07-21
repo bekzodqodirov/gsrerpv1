@@ -65,7 +65,8 @@ const CURRENCIES = [
 // Hujjat raqamlagichlar
 const SEQUENCES = [
   { docType: "client", prefix: "GSR" }, // mijoz kodi: GSR-0001
-  { docType: "cargo", prefix: "YK" }, //   yuk partiyasi: YK-2026-00001
+  { docType: "cargo", prefix: "YK" }, //   yuk: YK-2026-00001
+  { docType: "invoice", prefix: "INV" }, // invoys: INV-2026-00001
 ] as const;
 
 const ADMIN = {
