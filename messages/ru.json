@@ -198,7 +198,18 @@
     "scan_not_on_plan": "не в этой партии!",
     "scan_extra": "нет в манифесте!",
     "scan_unknown": "неизвестный код!",
-    "scan_wrong_status": "неподходящий статус"
+    "scan_wrong_status": "неподходящий статус",
+    "consolidation": "Консолидация в Кашгаре",
+    "consolidationSubtitle": "Груз в Кашгаре по клиентам — соберите международную партию KA в Узбекистан.",
+    "newKaBatch": "Новая международная партия (KA)",
+    "consolidationEmpty": "Сейчас в Кашгаре нет груза",
+    "arrivedOn": "Прибыл партией",
+    "onOutbound": "В партии KA",
+    "readyToLoad": "Готов",
+    "totalVolume": "Общий объём, м³",
+    "totalWeight": "Общий вес, кг",
+    "totalBoxes": "Коробки",
+    "clients": "Клиенты"
   },
   "batchStatus": {
     "planned": "Запланирована",

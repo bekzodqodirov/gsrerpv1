@@ -198,7 +198,18 @@
     "scan_not_on_plan": "不属于该批次!",
     "scan_extra": "不在清单中!",
     "scan_unknown": "未知编码!",
-    "scan_wrong_status": "批次状态不符"
+    "scan_wrong_status": "批次状态不符",
+    "consolidation": "喀什集运",
+    "consolidationSubtitle": "喀什的货物按客户分组 — 在此组建发往乌兹别克斯坦的国际批次 KA。",
+    "newKaBatch": "新建国际批次 (KA)",
+    "consolidationEmpty": "喀什暂无货物",
+    "arrivedOn": "到达批次",
+    "onOutbound": "已在 KA 批次",
+    "readyToLoad": "就绪",
+    "totalVolume": "总体积, m³",
+    "totalWeight": "总重量, kg",
+    "totalBoxes": "箱数",
+    "clients": "客户"
   },
   "batchStatus": {
     "planned": "已计划",

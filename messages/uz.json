@@ -198,7 +198,18 @@
     "scan_not_on_plan": "bu partiyada yo'q!",
     "scan_extra": "manifestda yo'q!",
     "scan_unknown": "noma'lum kod!",
-    "scan_wrong_status": "partiya holati mos emas"
+    "scan_wrong_status": "partiya holati mos emas",
+    "consolidation": "Qashqar konsolidatsiyasi",
+    "consolidationSubtitle": "Qashqardagi yuklar mijoz bo'yicha — O'zbekistonga xalqaro KA partiyani shu yerdan yasang.",
+    "newKaBatch": "Yangi xalqaro partiya (KA)",
+    "consolidationEmpty": "Hozircha Qashqarda yuk yo'q",
+    "arrivedOn": "Kelgan partiya",
+    "onOutbound": "KA partiyada",
+    "readyToLoad": "Tayyor",
+    "totalVolume": "Jami hajm, m³",
+    "totalWeight": "Jami og'irlik, kg",
+    "totalBoxes": "Karobka",
+    "clients": "Mijozlar"
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

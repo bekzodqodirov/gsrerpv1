@@ -198,7 +198,18 @@
     "scan_not_on_plan": "not on this batch!",
     "scan_extra": "not on manifest!",
     "scan_unknown": "unknown code!",
-    "scan_wrong_status": "wrong batch status"
+    "scan_wrong_status": "wrong batch status",
+    "consolidation": "Kashgar consolidation",
+    "consolidationSubtitle": "Cargo at Kashgar, grouped by client — build the international KA batch to Uzbekistan.",
+    "newKaBatch": "New international batch (KA)",
+    "consolidationEmpty": "No cargo at Kashgar right now",
+    "arrivedOn": "Arrived on",
+    "onOutbound": "On KA batch",
+    "readyToLoad": "Ready",
+    "totalVolume": "Total volume, m³",
+    "totalWeight": "Total weight, kg",
+    "totalBoxes": "Boxes",
+    "clients": "Clients"
   },
   "batchStatus": {
     "planned": "Planned",

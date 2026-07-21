@@ -789,6 +789,182 @@ export async function closeBatch(batchId: string) {
   await db.update(batches).set({ status: "closed", updatedAt: new Date() }).where(eq(batches.id, batchId));
 }
 
+// ─── Qashqar konsolidatsiyasi ────────────────────────────────────────────────
+// Qashqarda (konsolidatsiya ombori) turgan yuklar mijoz bo'yicha guruhlanadi,
+// qaysi partiyadan kelgani ko'rsatiladi va shu yerdan xalqaro KA partiya
+// yasaladi (Qashqar → O'zbekiston).
+
+export type ConsolidationCargo = {
+  cargoId: string;
+  regNumber: string;
+  boxes: number;
+  weightKg: number;
+  volumeM3: number;
+  receivedAt: Date;
+  arrivedOn: string | null; // kelgan partiya kodi (YW_003...)
+  onOutbound: boolean; // ochiq KA partiyaga qo'shilganmi
+};
+
+export type ConsolidationClient = {
+  clientId: string;
+  code: string;
+  name: string;
+  cargoCount: number;
+  totalBoxes: number;
+  totalWeightKg: number;
+  totalVolumeM3: number;
+  cargos: ConsolidationCargo[];
+};
+
+export async function getKashgarConsolidation() {
+  const session = await requirePermission("tms.view");
+
+  const consWh = await db.query.warehouses.findMany({
+    where: and(eq(warehouses.isActive, true), eq(warehouses.kind, "consolidation")),
+  });
+  let scopeIds = consWh.map((w) => w.id);
+  if (session.warehouseId) {
+    if (!scopeIds.includes(session.warehouseId)) {
+      return { warehouse: null, clients: [] as ConsolidationClient[], totals: emptyTotals(), toUzWarehouses: [] };
+    }
+    scopeIds = [session.warehouseId];
+  }
+  if (scopeIds.length === 0) {
+    return { warehouse: consWh[0] ?? null, clients: [] as ConsolidationClient[], totals: emptyTotals(), toUzWarehouses: [] };
+  }
+
+  const rows = await db
+    .select({
+      cargoId: cargos.id,
+      regNumber: cargos.regNumber,
+      boxes: cargos.totalBoxes,
+      kg: cargos.totalWeightKg,
+      m3: cargos.totalVolumeM3,
+      receivedAt: cargos.receivedAt,
+      clientId: clients.id,
+      clientCode: clients.code,
+      clientName: clients.name,
+    })
+    .from(cargos)
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .where(
+      and(
+        eq(cargos.voided, false),
+        eq(cargos.status, "at_kashgar"),
+        inArray(cargos.currentWarehouseId, scopeIds),
+      ),
+    )
+    .orderBy(asc(clients.code), asc(cargos.receivedAt));
+
+  const cargoIds = rows.map((r) => r.cargoId);
+
+  // Har yuk qaysi partiyada Qashqarga keldi (dest = konsolidatsiya ombori):
+  const arrivals = cargoIds.length
+    ? await db
+        .select({
+          cargoId: batchCargos.cargoId,
+          code: batches.code,
+          unloadedAt: batches.unloadedAt,
+        })
+        .from(batchCargos)
+        .innerJoin(batches, eq(batchCargos.batchId, batches.id))
+        .where(
+          and(
+            inArray(batchCargos.cargoId, cargoIds),
+            inArray(batches.destinationWarehouseId, scopeIds),
+          ),
+        )
+    : [];
+  const arrivedOn = new Map<string, string>();
+  for (const a of arrivals) {
+    // eng oxirgi kelishni saqlaymiz
+    if (!arrivedOn.has(a.cargoId)) arrivedOn.set(a.cargoId, a.code);
+  }
+
+  // Ochiq (yopilmagan) chiquvchi partiyalarga band qilinganlar:
+  const busy = cargoIds.length
+    ? await db
+        .select({ cargoId: batchCargos.cargoId })
+        .from(batchCargos)
+        .innerJoin(batches, eq(batchCargos.batchId, batches.id))
+        .where(
+          and(
+            inArray(batchCargos.cargoId, cargoIds),
+            inArray(batches.originWarehouseId, scopeIds),
+            ne(batches.status, "closed"),
+          ),
+        )
+    : [];
+  const busySet = new Set(busy.map((b) => b.cargoId));
+
+  const byClient = new Map<string, ConsolidationClient>();
+  const totals = emptyTotals();
+  for (const r of rows) {
+    const kg = Number(r.kg);
+    const m3 = Number(r.m3);
+    const c =
+      byClient.get(r.clientCode) ??
+      ({
+        clientId: r.clientId,
+        code: r.clientCode,
+        name: r.clientName,
+        cargoCount: 0,
+        totalBoxes: 0,
+        totalWeightKg: 0,
+        totalVolumeM3: 0,
+        cargos: [],
+      } satisfies ConsolidationClient);
+    c.cargoCount += 1;
+    c.totalBoxes += r.boxes;
+    c.totalWeightKg += kg;
+    c.totalVolumeM3 += m3;
+    c.cargos.push({
+      cargoId: r.cargoId,
+      regNumber: r.regNumber,
+      boxes: r.boxes,
+      weightKg: kg,
+      volumeM3: m3,
+      receivedAt: r.receivedAt,
+      arrivedOn: arrivedOn.get(r.cargoId) ?? null,
+      onOutbound: busySet.has(r.cargoId),
+    });
+    byClient.set(r.clientCode, c);
+
+    totals.cargoCount += 1;
+    totals.totalBoxes += r.boxes;
+    totals.totalWeightKg += kg;
+    totals.totalVolumeM3 += m3;
+  }
+
+  const clientList = [...byClient.values()].map((c) => ({
+    ...c,
+    totalWeightKg: Math.round(c.totalWeightKg * 1000) / 1000,
+    totalVolumeM3: Math.round(c.totalVolumeM3 * 10000) / 10000,
+  }));
+
+  // KA partiya uchun manzil omborlar (O'zbekiston):
+  const toUzWarehouses = await db.query.warehouses.findMany({
+    where: and(eq(warehouses.isActive, true), eq(warehouses.country, "UZ")),
+    orderBy: asc(warehouses.gsCode),
+    columns: { id: true, code: true, gsCode: true, name: true },
+  });
+
+  return {
+    warehouse: consWh.find((w) => scopeIds.includes(w.id)) ?? consWh[0] ?? null,
+    clients: clientList,
+    totals: {
+      ...totals,
+      totalWeightKg: Math.round(totals.totalWeightKg * 1000) / 1000,
+      totalVolumeM3: Math.round(totals.totalVolumeM3 * 10000) / 10000,
+    },
+    toUzWarehouses,
+  };
+}
+
+function emptyTotals() {
+  return { cargoCount: 0, totalBoxes: 0, totalWeightKg: 0, totalVolumeM3: 0 };
+}
+
 /** Forma uchun: origin/destination omborlar va faol mashinalar. */
 export async function getBatchFormData() {
   await requirePermission("tms.manage");

@@ -37,9 +37,15 @@ export default async function TmsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title={t("title")}>
-        <Link href="/tms/carriers">
+        <Link href="/tms/consolidation">
           <Button variant="outline">
             {icons.stock("h-4 w-4")}
+            {t("consolidation")}
+          </Button>
+        </Link>
+        <Link href="/tms/carriers">
+          <Button variant="outline">
+            {icons.truck("h-4 w-4")}
             {t("carriers")}
           </Button>
         </Link>

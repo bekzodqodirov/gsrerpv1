@@ -23,9 +23,12 @@ type CarrierOption = {
 export function BatchForm({
   warehouses,
   carriers,
+  fixedOrigin,
 }: {
   warehouses: WarehouseOption[];
   carriers: CarrierOption[];
+  // Belgilangan jo'natuvchi ombor (Qashqar konsolidatsiyasi — KA partiya).
+  fixedOrigin?: { id: string; name: string };
 }) {
   const t = useTranslations("tms");
   const tc = useTranslations("common");
@@ -42,28 +45,41 @@ export function BatchForm({
   const originOpts = warehouses.filter(
     (w) => w.kind === "receiving" || w.kind === "consolidation",
   );
+  // Belgilangan origin bo'lsa — manzil sifatida faqat boshqalarini ko'rsatamiz.
+  const destOpts = fixedOrigin
+    ? warehouses.filter((w) => w.id !== fixedOrigin.id)
+    : warehouses;
 
   return (
     <form action={formAction}>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Field label={t("origin")} required>
-          <Select name="originWarehouseId" required defaultValue="">
-            <option value="" disabled>
-              —
-            </option>
-            {originOpts.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.gsCode} — {w.name}
+        {fixedOrigin ? (
+          <Field label={t("origin")}>
+            <input type="hidden" name="originWarehouseId" value={fixedOrigin.id} />
+            <div className="flex h-10 items-center rounded-lg border border-line bg-surface-2 px-3 text-sm">
+              {fixedOrigin.name}
+            </div>
+          </Field>
+        ) : (
+          <Field label={t("origin")} required>
+            <Select name="originWarehouseId" required defaultValue="">
+              <option value="" disabled>
+                —
               </option>
-            ))}
-          </Select>
-        </Field>
+              {originOpts.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.gsCode} — {w.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field label={t("destination")} required>
           <Select name="destinationWarehouseId" required defaultValue="">
             <option value="" disabled>
               —
             </option>
-            {warehouses.map((w) => (
+            {destOpts.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.gsCode} — {w.name}
               </option>
