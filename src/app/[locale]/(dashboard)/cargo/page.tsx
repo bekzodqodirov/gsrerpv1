@@ -2,27 +2,9 @@ import { getTranslations } from "next-intl/server";
 import { getSession } from "@/modules/shared/auth";
 import { listCargos, getReceiveFormData } from "@/modules/cargo/service";
 import { cargoStatuses, type CargoStatus } from "@/modules/cargo/dto";
+import { Link } from "@/i18n/routing";
+import { statusColors } from "@/components/cargo-status";
 import { CargoForm } from "./cargo-form";
-
-const statusColors: Record<string, string> = {
-  received_cn: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  in_transit_ksg:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  at_kashgar: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
-  loaded: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
-  cn_customs:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  in_transit_uz:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  at_uz_warehouse:
-    "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
-  uz_customs:
-    "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  ready: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  delivered: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-  held: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  lost: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-};
 
 export default async function CargoPage({
   searchParams,
@@ -89,9 +71,9 @@ export default async function CargoPage({
               <th className="px-4 py-2 font-medium">{t("regNumber")}</th>
               <th className="px-4 py-2 font-medium">{t("client")}</th>
               <th className="px-4 py-2 font-medium">{t("warehouse")}</th>
-              <th className="px-4 py-2 font-medium">{t("pieces")}</th>
-              <th className="px-4 py-2 font-medium">{t("weightKg")}</th>
-              <th className="px-4 py-2 font-medium">{t("volumeM3")}</th>
+              <th className="px-4 py-2 font-medium">{t("boxCount")}</th>
+              <th className="px-4 py-2 font-medium">{t("totalWeight")}</th>
+              <th className="px-4 py-2 font-medium">{t("totalVolume")}</th>
               <th className="px-4 py-2 font-medium">{t("status")}</th>
             </tr>
           </thead>
@@ -109,16 +91,23 @@ export default async function CargoPage({
                 className="border-t border-gray-100 dark:border-gray-800"
               >
                 <td className="px-4 py-2 font-mono font-semibold">
-                  {c.regNumber}
+                  <Link
+                    href={`/cargo/${c.id}`}
+                    className="text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    {c.regNumber}
+                  </Link>
                 </td>
                 <td className="px-4 py-2">
-                  <span className="font-mono font-semibold">{c.clientCode}</span>{" "}
+                  <span className="font-mono font-semibold">
+                    {c.clientCode}
+                  </span>{" "}
                   <span className="text-gray-500">{c.clientName}</span>
                 </td>
                 <td className="px-4 py-2">{c.warehouseCode ?? "—"}</td>
-                <td className="px-4 py-2">{c.pieces}</td>
-                <td className="px-4 py-2">{c.weightKg}</td>
-                <td className="px-4 py-2">{c.volumeM3}</td>
+                <td className="px-4 py-2">{c.totalBoxes}</td>
+                <td className="px-4 py-2">{c.totalWeightKg}</td>
+                <td className="px-4 py-2">{c.totalVolumeM3}</td>
                 <td className="px-4 py-2">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${statusColors[c.status] ?? ""}`}

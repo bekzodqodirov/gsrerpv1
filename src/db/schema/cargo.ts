@@ -1,6 +1,13 @@
-// Yuk partiyasi va uning hayot tsikli.
-// Partiya = bitta mijozdan bitta skladda qabul qilingan yuk (joy soni, kg, kub).
-// Holat zanjiri oldinga qarab yuradi; istisnolar cargo_event orqali qayd etiladi.
+// Yuk (prixod) va uning tarkibi.
+//
+// Tuzilma:
+//   cargo (prixod, YK-2026-00001) — bitta mijozdan bitta skladda bir qabul
+//     └── cargo_line (qator) — har xil tovar alohida qator:
+//           "oyinchoq 35×35×35, 30 karobka, 25 kg dan"
+//           "kosmetika 50×55×60, 70 karobka, 50 kg dan"
+//         └── cargo_box (karobka) — har biriga unique QR: YK-2026-00001-B001
+//   pallet (paddon) — qayta upakovkada karobkalar paddonga biriktiriladi
+//   attachment — rasm/fayl (prixodga ham, qatorga ham)
 import {
   pgTable,
   uuid,
@@ -13,13 +20,14 @@ import {
   boolean,
   pgEnum,
   index,
+  unique,
 } from "drizzle-orm/pg-core";
-import { clients, warehouses, productTypes } from "./catalog";
+import { clients, warehouses } from "./catalog";
 import { users } from "./system";
 
 // Yuk holatlari — jarayon bosqichlari:
 export const cargoStatusEnum = pgEnum("cargo_status", [
-  "received_cn", //      1. Xitoy skladida qabul qilindi (YW/GZ/URC yoki to'g'ridan-to'g'ri KSG)
+  "received_cn", //      1. Xitoy skladida qabul qilindi
   "in_transit_ksg", //   2. Qashqarga ichki tranzitda
   "at_kashgar", //       3. Qashqarda qabul qilindi (konsolidatsiya)
   "loaded", //           4. Xalqaro mashinaga yuklandi
@@ -29,47 +37,50 @@ export const cargoStatusEnum = pgEnum("cargo_status", [
   "uz_customs", //       8. Rastamojka jarayonida
   "ready", //            9. Tozalangan — tarqatishga tayyor
   "delivered", //       10. Mijozga topshirildi
-  "held", //             ⚠ Ushlab turilgan (qarz, bojxona muammosi...) — sababi eventda
+  "held", //             ⚠ Ushlab turilgan (qarz, bojxona muammosi...)
   "lost", //             ⚠ Yo'qolgan (to'liq)
 ]);
+
+// ─── Prixod (yuk qabul hujjati) ──────────────────────────────────────────────
 
 export const cargos = pgTable(
   "cargo",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    regNumber: varchar("reg_number", { length: 32 }).notNull().unique(), // YK-2026-00001
+    regNumber: varchar("reg_number", { length: 32 }).notNull().unique(),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id),
-    productTypeId: uuid("product_type_id").references(() => productTypes.id),
-    description: text("description"), // tovar tavsifi (erkin matn)
 
-    // Qabul paytidagi o'lchovlar (Xitoy skladida):
     originWarehouseId: uuid("origin_warehouse_id")
       .notNull()
       .references(() => warehouses.id),
-    pieces: integer("pieces").notNull(), // joy (mest) soni
-    weightKg: numeric("weight_kg", { precision: 12, scale: 3 }).notNull(),
-    volumeM3: numeric("volume_m3", { precision: 12, scale: 4 }).notNull(),
+    currentWarehouseId: uuid("current_warehouse_id").references(
+      () => warehouses.id,
+    ),
+
+    // Qatorlardan yig'ilgan jami (denormalizatsiya — ro'yxat tez ochilishi uchun):
+    totalBoxes: integer("total_boxes").notNull().default(0),
+    totalWeightKg: numeric("total_weight_kg", { precision: 12, scale: 3 })
+      .notNull()
+      .default("0"),
+    totalVolumeM3: numeric("total_volume_m3", { precision: 12, scale: 4 })
+      .notNull()
+      .default("0"),
 
     // Qashqarda qayta o'lchash (farq chiqsa shu yerda ko'rinadi):
-    ksgPieces: integer("ksg_pieces"),
+    ksgBoxes: integer("ksg_boxes"),
     ksgWeightKg: numeric("ksg_weight_kg", { precision: 12, scale: 3 }),
     ksgVolumeM3: numeric("ksg_volume_m3", { precision: 12, scale: 4 }),
 
     status: cargoStatusEnum("status").notNull().default("received_cn"),
-    // Yuk hozir qaysi skladda (yo'lda bo'lsa null):
-    currentWarehouseId: uuid("current_warehouse_id").references(
-      () => warehouses.id,
-    ),
-    // held holatidan oldingi holat (qaytarish uchun):
     heldFromStatus: varchar("held_from_status", { length: 32 }),
 
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 
     note: text("note"),
-    voided: boolean("voided").notNull().default(false), // xato kiritilgan — o'chirilmaydi
+    voided: boolean("voided").notNull().default(false),
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -85,9 +96,109 @@ export const cargos = pgTable(
   ],
 );
 
+// ─── Qator (har xil tovar alohida) ───────────────────────────────────────────
+// O'lchamlar karobka bo'yicha (sm). O'lchab bo'lmagan holatda o'lchamlar bo'sh
+// qoladi va umumiy kg/kub qo'lda kiritiladi.
+
+export const cargoLines = pgTable(
+  "cargo_line",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cargoId: uuid("cargo_id")
+      .notNull()
+      .references(() => cargos.id),
+    lineNo: integer("line_no").notNull(), // 1, 2, 3...
+    productName: varchar("product_name", { length: 255 }).notNull(),
+
+    boxCount: integer("box_count").notNull(),
+    // Karobka o'lchamlari (sm) — ixtiyoriy:
+    boxLengthCm: numeric("box_length_cm", { precision: 8, scale: 2 }),
+    boxWidthCm: numeric("box_width_cm", { precision: 8, scale: 2 }),
+    boxHeightCm: numeric("box_height_cm", { precision: 8, scale: 2 }),
+    // Bir karobka og'irligi (kg) — ixtiyoriy:
+    weightPerBoxKg: numeric("weight_per_box_kg", { precision: 10, scale: 3 }),
+
+    // Yakuniy jami (kiritilgan yoki hisoblangan):
+    totalWeightKg: numeric("total_weight_kg", {
+      precision: 12,
+      scale: 3,
+    }).notNull(),
+    totalVolumeM3: numeric("total_volume_m3", {
+      precision: 12,
+      scale: 4,
+    }).notNull(),
+
+    note: text("note"),
+  },
+  (t) => [
+    index("cargo_line_cargo_idx").on(t.cargoId),
+    unique("cargo_line_no_uq").on(t.cargoId, t.lineNo),
+  ],
+);
+
+// ─── Paddon (qayta upakovka) ─────────────────────────────────────────────────
+
+export const pallets = pgTable("pallet", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: varchar("code", { length: 64 }).notNull().unique(), // PLT-2026-0001
+  warehouseId: uuid("warehouse_id")
+    .notNull()
+    .references(() => warehouses.id),
+  note: text("note"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ─── Karobka (har biriga unique QR) ─────────────────────────────────────────
+
+export const cargoBoxes = pgTable(
+  "cargo_box",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cargoId: uuid("cargo_id")
+      .notNull()
+      .references(() => cargos.id),
+    lineId: uuid("line_id")
+      .notNull()
+      .references(() => cargoLines.id),
+    boxNo: integer("box_no").notNull(), // prixod ichida 1..N
+    qrCode: varchar("qr_code", { length: 64 }).notNull().unique(), // YK-2026-00001-B001
+    // Qayta upakovkada paddonga biriktiriladi:
+    palletId: uuid("pallet_id").references(() => pallets.id),
+    // damaged | missing kabi belgi (istisno holatlar):
+    flag: varchar("flag", { length: 16 }),
+  },
+  (t) => [
+    index("cargo_box_cargo_idx").on(t.cargoId),
+    index("cargo_box_pallet_idx").on(t.palletId),
+    unique("cargo_box_no_uq").on(t.cargoId, t.boxNo),
+  ],
+);
+
+// ─── Fayl biriktirmalar ──────────────────────────────────────────────────────
+// entity: "cargo" (prixod fayllari: excel/word/pdf/rasm) | "cargo_line" (tovar rasmlari)
+
+export const attachments = pgTable(
+  "attachment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entity: varchar("entity", { length: 32 }).notNull(),
+    entityId: uuid("entity_id").notNull(),
+    fileName: varchar("file_name", { length: 255 }).notNull(), // asl nom
+    storedName: varchar("stored_name", { length: 64 }).notNull().unique(), // diskdagi nom
+    mimeType: varchar("mime_type", { length: 128 }).notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    uploadedBy: uuid("uploaded_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("attachment_entity_idx").on(t.entity, t.entityId)],
+);
+
 // ─── Hodisalar jurnali ───────────────────────────────────────────────────────
-// Har bir holat o'zgarishi va istisno (shikast, kamomad, ushlab turish,
-// qayta o'lchash farqi) shu yerga yoziladi. Yozuvlar o'chirilmaydi.
 
 export const cargoEvents = pgTable(
   "cargo_event",
@@ -96,11 +207,10 @@ export const cargoEvents = pgTable(
     cargoId: uuid("cargo_id")
       .notNull()
       .references(() => cargos.id),
-    // status_change | remeasure | damage | shortage | hold | release | note
+    // status_change | remeasure | repack | damage | shortage | hold | release | note
     type: varchar("type", { length: 32 }).notNull(),
     fromStatus: varchar("from_status", { length: 32 }),
     toStatus: varchar("to_status", { length: 32 }),
-    // Qo'shimcha ma'lumot: {pieces: 2, reason: "..."} kabi
     data: jsonb("data"),
     comment: text("comment"),
     userId: uuid("user_id").references(() => users.id),

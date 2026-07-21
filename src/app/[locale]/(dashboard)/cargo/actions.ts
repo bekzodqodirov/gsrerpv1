@@ -3,24 +3,36 @@
 import { revalidatePath } from "next/cache";
 import { receiveCargo } from "@/modules/cargo/service";
 import { receiveCargoSchema } from "@/modules/cargo/dto";
+import { saveAttachment } from "@/modules/shared/attachments";
+import { getSession } from "@/modules/shared/auth";
+import { db } from "@/db";
+import { cargoLines } from "@/db/schema";
+import { asc, eq } from "drizzle-orm";
 
-export type CargoFormState = { error?: string; createdReg?: string };
+export type CargoFormState = {
+  error?: string;
+  createdReg?: string;
+  createdId?: string;
+};
 
 export async function receiveCargoAction(
   _prev: CargoFormState,
   formData: FormData,
 ): Promise<CargoFormState> {
-  const str = (k: string) => String(formData.get(k) ?? "");
-  const raw = {
-    clientId: str("clientId"),
-    originWarehouseId: str("originWarehouseId"),
-    pieces: str("pieces"),
-    weightKg: str("weightKg"),
-    volumeM3: str("volumeM3"),
-    description: str("description"),
-    note: str("note"),
-  };
-  const parsed = receiveCargoSchema.safeParse(raw);
+  // Qatorlar client komponentdan JSON bo'lib keladi
+  let linesRaw: unknown;
+  try {
+    linesRaw = JSON.parse(String(formData.get("linesJson") ?? "[]"));
+  } catch {
+    return { error: "validation" };
+  }
+
+  const parsed = receiveCargoSchema.safeParse({
+    clientId: String(formData.get("clientId") ?? ""),
+    originWarehouseId: String(formData.get("originWarehouseId") ?? ""),
+    note: String(formData.get("note") ?? ""),
+    lines: linesRaw,
+  });
   if (!parsed.success) {
     console.error("[cargo] validation:", JSON.stringify(parsed.error.issues));
     return { error: "validation" };
@@ -28,8 +40,32 @@ export async function receiveCargoAction(
 
   try {
     const cargo = await receiveCargo(parsed.data);
+    const session = (await getSession())!;
+
+    // Prixod fayllari (excel/word/pdf/rasm)
+    const files = formData
+      .getAll("files")
+      .filter((f): f is File => f instanceof File && f.size > 0);
+    for (const f of files.slice(0, 10)) {
+      await saveAttachment("cargo", cargo.id, f, session.sub);
+    }
+
+    // Qator rasmlari: linePhotos_0, linePhotos_1, ...
+    const savedLines = await db.query.cargoLines.findMany({
+      where: eq(cargoLines.cargoId, cargo.id),
+      orderBy: asc(cargoLines.lineNo),
+    });
+    for (let i = 0; i < savedLines.length; i++) {
+      const photos = formData
+        .getAll(`linePhotos_${i}`)
+        .filter((f): f is File => f instanceof File && f.size > 0);
+      for (const p of photos.slice(0, 10)) {
+        await saveAttachment("cargo_line", savedLines[i].id, p, session.sub);
+      }
+    }
+
     revalidatePath("/[locale]/cargo", "page");
-    return { createdReg: cargo.regNumber };
+    return { createdReg: cargo.regNumber, createdId: cargo.id };
   } catch (e) {
     console.error("[cargo] server error:", e);
     return { error: "server" };

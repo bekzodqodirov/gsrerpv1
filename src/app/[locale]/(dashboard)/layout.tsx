@@ -22,7 +22,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-56 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+      <aside className="flex w-56 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900 print:hidden">
         <div className="border-b border-gray-200 p-4 dark:border-gray-700">
           <span className="text-lg font-bold">{t("appName")}</span>
         </div>
