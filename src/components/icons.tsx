@@ -40,6 +40,14 @@ export const icons = {
       <path d="M12 13v9" />
     </Icon>
   ),
+  stock: (c?: string) => (
+    <Icon className={c}>
+      <path d="M3 21V8l9-4 9 4v13" />
+      <path d="M3 21h18" />
+      <rect x="7" y="12" width="4" height="4" />
+      <rect x="13" y="12" width="4" height="4" />
+    </Icon>
+  ),
   clients: (c?: string) => (
     <Icon className={c}>
       <circle cx="9" cy="8" r="3.5" />
