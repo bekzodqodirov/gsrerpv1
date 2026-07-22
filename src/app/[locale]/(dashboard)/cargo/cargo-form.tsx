@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useEffect, useState } from "react";
+import { useActionState, useRef, useEffect, useState, startTransition } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Button, Input, Select, Field, controlCls, cn } from "@/components/ui";
 import { icons } from "@/components/icons";
@@ -271,7 +271,9 @@ export function CargoForm({
         const photos = await compressImages(lines[i].photos);
         for (const p of photos) fd.append(`linePhotos_${i}`, p);
       }
-      formAction(fd);
+      // useActionState dispatchini transition ichida chaqiramiz — aks holda
+      // `pending` (isPending) to'g'ri yangilanmaydi (brauzer ogohlantirishi).
+      startTransition(() => formAction(fd));
     } finally {
       setPreparing(false);
     }
