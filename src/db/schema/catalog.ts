@@ -26,6 +26,11 @@ export const clients = pgTable("client", {
   // Qarzga ruxsat: null = qarz mumkin emas, qiymat = limit (USD).
   // Qarzdor mijoz yuki tarqatishda ushlab turiladi (service tekshiradi).
   creditLimitUsd: numeric("credit_limit_usd", { precision: 18, scale: 2 }),
+  // Harf-kod hisoblagichi: mijozning tovar guruhlari A, B, C ... tarzida
+  // KETMA-KET yuritiladi. Har yangi prixod oldingi harfdan davom etadi
+  // (boshidan A ga qaytmaydi). Bu yerda mijozga berilgan harflar SONI saqlanadi
+  // — keyingi harf shu qiymatdan boshlanadi (letterCodeForIndex bilan matnga).
+  lastLetterSeq: integer("last_letter_seq").notNull().default(0),
   note: text("note"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })

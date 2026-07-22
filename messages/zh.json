@@ -84,7 +84,8 @@
     "searchClient": "输入客户编码或姓名...",
     "noClients": "未找到客户",
     "clientRequired": "请选择客户",
-    "sameCodeNote": "该商品的所有箱子共用此编码"
+    "sameCodeNote": "该商品的所有箱子共用此编码",
+    "compressing": "正在压缩…"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",

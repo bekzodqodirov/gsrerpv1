@@ -84,7 +84,8 @@
     "searchClient": "Type client code or name...",
     "noClients": "No clients found",
     "clientRequired": "Please select a client",
-    "sameCodeNote": "All boxes of this product share this same code"
+    "sameCodeNote": "All boxes of this product share this same code",
+    "compressing": "Compressing…"
   },
   "cargoStatus": {
     "received_cn": "Received in China",

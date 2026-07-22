@@ -1,6 +1,7 @@
 // Yuk servisi: ko'p qatorli qabul, karobka QR kodlari, ro'yxat, tafsilot.
 // Sklad xodimi (session.warehouseId bor) faqat o'z skladida ishlaydi.
-import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   cargos,
@@ -82,7 +83,13 @@ export async function receiveCargo(input: ReceiveCargoInput) {
       })
       .returning();
 
-    await insertLinesAndBoxes(tx, c.id, regNumber, data.lines, lineTotals);
+    // Harflar mijozning uzluksiz ketma-ketligidan ajratiladi (A,B,C → D,E...).
+    const letterSeqs = await allocateClientLetters(
+      tx,
+      client.id,
+      data.lines.length,
+    );
+    await insertLinesAndBoxes(tx, c.id, regNumber, data.lines, lineTotals, letterSeqs);
 
     await tx.insert(cargoEvents).values({
       cargoId: c.id,
@@ -138,6 +145,17 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
   const totalVolumeM3 = lineTotals.reduce((s, t) => s + t.totalVolumeM3, 0);
 
   const cargo = await db.transaction(async (tx) => {
+    // Mavjud harf-tartiblarni saqlaymiz — tahrirda harflar siljib ketmasin.
+    // Mijoz o'zgarmagan bo'lsa qayta ishlatamiz; o'zgargan bo'lsa yangi
+    // mijozdan yangi harflar ajratamiz (eskilari eski mijozda qoladi).
+    const oldLines = await tx.query.cargoLines.findMany({
+      where: eq(cargoLines.cargoId, cargoId),
+      orderBy: asc(cargoLines.lineNo),
+      columns: { letterSeq: true },
+    });
+    const reuse =
+      existing.clientId === client.id ? oldLines.map((l) => l.letterSeq) : [];
+
     await tx.delete(cargoBoxes).where(eq(cargoBoxes.cargoId, cargoId));
     await tx.delete(cargoLines).where(eq(cargoLines.cargoId, cargoId));
 
@@ -156,7 +174,13 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
       .where(eq(cargos.id, cargoId))
       .returning();
 
-    await insertLinesAndBoxes(tx, c.id, c.regNumber, data.lines, lineTotals);
+    const letterSeqs = await allocateClientLetters(
+      tx,
+      client.id,
+      data.lines.length,
+      reuse,
+    );
+    await insertLinesAndBoxes(tx, c.id, c.regNumber, data.lines, lineTotals, letterSeqs);
 
     await tx.insert(cargoEvents).values({
       cargoId: c.id,
@@ -179,6 +203,44 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
   return cargo;
 }
 
+/**
+ * Mijozning uzluksiz harf ketma-ketligidan `count` ta tartib ajratadi.
+ * `reuse` — tahrirda saqlanadigan eski tartiblar (birinchi navbatda ular
+ * ishlatiladi); yetmagani mijoz hisoblagichidan (client.lastLetterSeq) olinadi
+ * va hisoblagich shuncha oshiriladi. Natija — qatorlar tartibida absolyut
+ * 0-based indekslar massivi.
+ */
+async function allocateClientLetters(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  clientId: string,
+  count: number,
+  reuse: number[] = [],
+): Promise<number[]> {
+  const reuseSorted = [...reuse].sort((a, b) => a - b).slice(0, count);
+  const extra = count - reuseSorted.length;
+
+  let freshBase = 0;
+  if (extra > 0) {
+    const [row] = await tx
+      .update(clients)
+      .set({ lastLetterSeq: sql`${clients.lastLetterSeq} + ${extra}` })
+      .where(eq(clients.id, clientId))
+      .returning({ last: clients.lastLetterSeq });
+    freshBase = Number(row.last) - extra;
+  }
+
+  const seqs: number[] = [];
+  for (let i = 0; i < count; i++) {
+    seqs.push(
+      i < reuseSorted.length
+        ? reuseSorted[i]
+        : freshBase + (i - reuseSorted.length),
+    );
+  }
+  return seqs;
+}
+
 async function insertLinesAndBoxes(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
@@ -186,19 +248,22 @@ async function insertLinesAndBoxes(
   regNumber: string,
   lines: ReceiveCargoInput["lines"],
   lineTotals: ReturnType<typeof computeLineTotals>[],
+  letterSeqs: number[],
 ) {
   let boxNo = 0;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     const totals = lineTotals[i];
-    // Harf — tovar (qator) darajasida guruhlash uchun (inson o'qiydi).
-    const letterCode = letterCodeForIndex(i);
+    // Harf — mijoz bo'yicha uzluksiz tartibdan (guruhlash uchun, inson o'qiydi).
+    const letterSeq = letterSeqs[i];
+    const letterCode = letterCodeForIndex(letterSeq);
 
     const [line] = await tx
       .insert(cargoLines)
       .values({
         cargoId,
         lineNo: i + 1,
+        letterSeq,
         letterCode,
         productName: l.productName,
         boxCount: l.boxCount,
@@ -379,6 +444,7 @@ export async function listCargos(filter: CargoListFilter = {}) {
 export async function getCargo(id: string) {
   const session = await requirePermission("cargo.view");
 
+  const originWh = alias(warehouses, "origin_wh");
   const rows = await db
     .select({
       cargo: cargos,
@@ -387,10 +453,15 @@ export async function getCargo(id: string) {
       warehouseCode: warehouses.code,
       warehouseName: warehouses.name,
       warehouseGsCode: warehouses.gsCode,
+      // Yuk QAYSI skladdan kelgani (yorliqda ko'rsatiladi) — qabul qilingan sklad:
+      originCode: originWh.code,
+      originName: originWh.name,
+      originGsCode: originWh.gsCode,
     })
     .from(cargos)
     .innerJoin(clients, eq(cargos.clientId, clients.id))
     .leftJoin(warehouses, eq(cargos.currentWarehouseId, warehouses.id))
+    .leftJoin(originWh, eq(cargos.originWarehouseId, originWh.id))
     .where(eq(cargos.id, id))
     .limit(1);
   const row = rows[0];

@@ -6,6 +6,7 @@ import { Button, Input, Select, Field, controlCls, cn } from "@/components/ui";
 import { icons } from "@/components/icons";
 import { receiveCargoAction, type CargoFormState } from "./actions";
 import { translateProductNameAction } from "./translate-action";
+import { compressImages } from "@/components/image-compress";
 
 type Option = { id: string; code: string; name: string };
 
@@ -19,6 +20,7 @@ type Line = {
   totalWeightKg: string;
   totalVolumeM3: string;
   manual: boolean; // o'lchab bo'lmagan: umumiy kg/kub qo'lda
+  photos: File[]; // qator (tovar) rasmlari — yuborishdan oldin siqiladi
 };
 
 export type InitialCargoLine = {
@@ -42,6 +44,7 @@ const emptyLine = (): Line => ({
   totalWeightKg: "",
   totalVolumeM3: "",
   manual: false,
+  photos: [],
 });
 
 function lineFromInitial(l: InitialCargoLine): Line {
@@ -56,6 +59,7 @@ function lineFromInitial(l: InitialCargoLine): Line {
     totalWeightKg: manual ? l.totalWeightKg : "",
     totalVolumeM3: manual ? l.totalVolumeM3 : "",
     manual,
+    photos: [],
   };
 }
 
@@ -91,21 +95,28 @@ function linePreview(l: Line): { kg: number; m3: number } | null {
   return kg || m3 ? { kg, m3 } : null;
 }
 
-/** Kichik, kamtarona "rasm qo'shish" tugmasi — to'liq inputga qaraganda ancha ixcham. */
-function PhotoPicker({ name, label }: { name: string; label: string }) {
+/** Kichik, kamtarona "rasm qo'shish" tugmasi — to'liq inputga qaraganda ancha ixcham.
+ *  Tanlangan fayllar state'da saqlanadi (yuborishdan oldin siqiladi). */
+function PhotoPicker({
+  label,
+  files,
+  onFiles,
+}: {
+  label: string;
+  files: File[];
+  onFiles: (files: File[]) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [count, setCount] = useState(0);
 
   return (
     <div className="flex shrink-0 items-center gap-2">
       <input
         ref={inputRef}
-        name={name}
         type="file"
         multiple
         accept="image/*"
         className="hidden"
-        onChange={(e) => setCount(e.target.files?.length ?? 0)}
+        onChange={(e) => onFiles(Array.from(e.target.files ?? []))}
       />
       <button
         type="button"
@@ -114,9 +125,9 @@ function PhotoPicker({ name, label }: { name: string; label: string }) {
       >
         {icons.camera("h-3.5 w-3.5")}
         {label}
-        {count > 0 && (
+        {files.length > 0 && (
           <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
-            {count}
+            {files.length}
           </span>
         )}
       </button>
@@ -225,6 +236,8 @@ export function CargoForm({
   const [clientError, setClientError] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId ?? "");
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
+  const [preparing, setPreparing] = useState(false); // rasmlarni siqish jarayoni
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [state, formAction, pending] = useActionState<CargoFormState, FormData>(
     receiveCargoAction,
@@ -237,9 +250,38 @@ export function CargoForm({
       setLines([emptyLine()]);
       setClientId("");
       setWarehouseId("");
+      setReceiptFiles([]);
       setResetKey((k) => k + 1);
     }
   }, [state.createdReg, isEdit]);
+
+  /**
+   * Yuborish: rasmlarni brauzerda siqib, FormData ni qo'lda yig'amiz.
+   * (Siqish server action body limitiga urilmaslik + bazani yengil tutish uchun.)
+   */
+  async function submitCompressed() {
+    setConfirmOpen(false);
+    setPreparing(true);
+    try {
+      const fd = new FormData();
+      if (cargoId) fd.set("cargoId", cargoId);
+      fd.set("clientId", clientId);
+      fd.set("originWarehouseId", warehouseId);
+      fd.set("note", initialNote ?? "");
+      fd.set("linesJson", JSON.stringify(lines.map(lineToPayload)));
+
+      const receipts = await compressImages(receiptFiles);
+      for (const f of receipts) fd.append("files", f);
+
+      for (let i = 0; i < lines.length; i++) {
+        const photos = await compressImages(lines[i].photos);
+        for (const p of photos) fd.append(`linePhotos_${i}`, p);
+      }
+      formAction(fd);
+    } finally {
+      setPreparing(false);
+    }
+  }
 
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((prev) => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -284,15 +326,7 @@ export function CargoForm({
   }
 
   return (
-    <form ref={formRef} action={formAction}>
-      {cargoId && <input type="hidden" name="cargoId" value={cargoId} />}
-      <input type="hidden" name="clientId" value={clientId} />
-      <input
-        type="hidden"
-        name="linesJson"
-        value={JSON.stringify(lines.map(lineToPayload))}
-      />
-
+    <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
       {/* Prixod sarlavhasi */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={t("client")} required>
@@ -339,10 +373,10 @@ export function CargoForm({
 
         <Field label={t("receiptFiles")}>
           <input
-            name="files"
             type="file"
             multiple
             accept="image/*,.pdf,.xls,.xlsx,.doc,.docx"
+            onChange={(e) => setReceiptFiles(Array.from(e.target.files ?? []))}
             className={cn(
               controlCls,
               "file:mr-3 file:h-full file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-primary",
@@ -499,8 +533,9 @@ export function CargoForm({
 
                 <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:justify-end">
                   <PhotoPicker
-                    name={`linePhotos_${i}`}
                     label={t("linePhotos")}
+                    files={l.photos}
+                    onFiles={(photos) => setLine(i, { photos })}
                   />
                 </div>
               </div>
@@ -549,10 +584,16 @@ export function CargoForm({
       <Button
         type="button"
         onClick={handleReviewClick}
-        disabled={pending}
+        disabled={pending || preparing}
         className="mt-4"
       >
-        {pending ? tc("loading") : isEdit ? t("saveChanges") : t("receive")}
+        {preparing
+          ? t("compressing")
+          : pending
+            ? tc("loading")
+            : isEdit
+              ? t("saveChanges")
+              : t("receive")}
       </Button>
 
       {confirmOpen && (
@@ -614,13 +655,7 @@ export function CargoForm({
               >
                 {t("confirmCancel")}
               </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setConfirmOpen(false);
-                  formRef.current?.requestSubmit();
-                }}
-              >
+              <Button type="button" onClick={submitCompressed}>
                 {t("confirmSubmit")}
               </Button>
             </div>

@@ -21,9 +21,18 @@ import {
   pgEnum,
   index,
   unique,
+  customType,
 } from "drizzle-orm/pg-core";
 import { clients, warehouses } from "./catalog";
 import { users } from "./system";
+
+// Postgres bytea — fayl baytlarini to'g'ridan-to'g'ri bazada saqlash uchun.
+// Diskka bog'liqlikni yo'qotadi (ephemeral serverlarda ham fayllar yo'qolmaydi).
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // Yuk holatlari — jarayon bosqichlari:
 export const cargoStatusEnum = pgEnum("cargo_status", [
@@ -108,9 +117,13 @@ export const cargoLines = pgTable(
       .notNull()
       .references(() => cargos.id),
     lineNo: integer("line_no").notNull(), // 1, 2, 3...
-    // Shu tovar turining prixod ichidagi harf kodi: A, B, ... Z, AA, ... ZZ,
-    // so'ng yana A ga qaytadi. Bir xil tovarning BARCHA karobkalari shu bir
-    // xil harfni oladi (masalan 50 ta "oyinchoq" karobkasi — hammasi "A").
+    // Mijoz bo'yicha UZLUKSIZ harf ketma-ketligidagi absolyut tartib (0-based):
+    // client.lastLetterSeq dan ajratiladi. Shu son letterCodeForIndex orqali
+    // harfga aylanadi (0→A, 1→B, ... 26→AA). Yangi prixod oldingi harfdan
+    // davom etadi — boshidan A ga qaytmaydi.
+    letterSeq: integer("letter_seq").notNull().default(0),
+    // Yuqoridagi tartibdan hisoblangan harf-kod matni (A, B, ... AA): inson
+    // o'qishi va yorliqlar uchun. letterSeq bilan sinxron saqlanadi.
     letterCode: varchar("letter_code", { length: 4 }).notNull(),
     productName: varchar("product_name", { length: 255 }).notNull(),
 
@@ -195,9 +208,12 @@ export const attachments = pgTable(
     entity: varchar("entity", { length: 32 }).notNull(),
     entityId: uuid("entity_id").notNull(),
     fileName: varchar("file_name", { length: 255 }).notNull(), // asl nom
-    storedName: varchar("stored_name", { length: 64 }).notNull().unique(), // diskdagi nom
+    storedName: varchar("stored_name", { length: 64 }).notNull().unique(), // ichki identifikator
     mimeType: varchar("mime_type", { length: 128 }).notNull(),
     sizeBytes: integer("size_bytes").notNull(),
+    // Fayl baytlari — bazada saqlanadi (siqilgan rasm). Eski disk yozuvlarida
+    // null bo'lishi mumkin (o'sha holatda disk'dan o'qiladi — orqaga muvofiqlik).
+    data: bytea("data"),
     uploadedBy: uuid("uploaded_by").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

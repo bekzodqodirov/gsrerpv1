@@ -15,6 +15,7 @@ import {
   TRow,
 } from "@/components/ui";
 import { icons } from "@/components/icons";
+import { PhotoThumbs } from "@/components/photo-lightbox";
 
 export default async function CargoDetailPage({
   params,
@@ -126,26 +127,11 @@ export default async function CargoDetailPage({
                 {qrCode}
               </Td>
               <Td>
-                <div className="flex flex-wrap gap-1.5">
-                  {lineFiles[i]?.map((f) => (
-                    <a
-                      key={f.id}
-                      href={`/api/files/${f.id}`}
-                      target="_blank"
-                      className="block h-11 w-11 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/files/${f.id}`}
-                        alt={f.fileName}
-                        className="h-full w-full object-cover"
-                      />
-                    </a>
-                  ))}
-                  {(!lineFiles[i] || lineFiles[i].length === 0) && (
-                    <span className="text-muted">—</span>
-                  )}
-                </div>
+                <PhotoThumbs
+                  photos={(lineFiles[i] ?? [])
+                    .filter((f) => f.mimeType.startsWith("image/"))
+                    .map((f) => ({ id: f.id, name: f.fileName }))}
+                />
               </Td>
             </TRow>
             );

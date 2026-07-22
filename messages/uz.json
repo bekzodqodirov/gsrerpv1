@@ -84,7 +84,8 @@
     "searchClient": "Mijoz kodi yoki nomini yozing...",
     "noClients": "Mijoz topilmadi",
     "clientRequired": "Mijozni tanlang",
-    "sameCodeNote": "Shu tovarning barcha karobkalari shu kodga ega"
+    "sameCodeNote": "Shu tovarning barcha karobkalari shu kodga ega",
+    "compressing": "Rasmlar siqilmoqda…"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",

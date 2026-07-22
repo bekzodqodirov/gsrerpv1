@@ -6,6 +6,7 @@ import { Link } from "@/i18n/routing";
 import { TableWrap, Th, Td, TRow, EmptyRow, Badge } from "@/components/ui";
 import { icons } from "@/components/icons";
 import { statusColors } from "@/components/cargo-status";
+import { PhotoThumbs } from "@/components/photo-lightbox";
 import { getLineQrPreviewAction } from "./qr-preview-action";
 
 type Line = {
@@ -193,19 +194,10 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
                 </Td>
                 <Td>
                   {c.photoId ? (
-                    <a
-                      href={`/api/files/${c.photoId}`}
-                      target="_blank"
-                      onClick={(e) => e.stopPropagation()}
-                      className="block h-9 w-9 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/files/${c.photoId}`}
-                        alt={c.regNumber}
-                        className="h-full w-full object-cover"
-                      />
-                    </a>
+                    <PhotoThumbs
+                      photos={[{ id: c.photoId, name: c.regNumber }]}
+                      thumbClass="h-9 w-9"
+                    />
                   ) : (
                     <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-2 text-muted">
                       {icons.camera("h-4 w-4")}
@@ -277,19 +269,12 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
                               <tr key={l.id} className="border-t border-line/60">
                                 <td className="px-2 py-1.5">
                                   {l.photoId ? (
-                                    <a
-                                      href={`/api/files/${l.photoId}`}
-                                      target="_blank"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="block h-10 w-10 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        src={`/api/files/${l.photoId}`}
-                                        alt={l.productName}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    </a>
+                                    <PhotoThumbs
+                                      photos={[
+                                        { id: l.photoId, name: l.productName },
+                                      ]}
+                                      thumbClass="h-10 w-10"
+                                    />
                                   ) : (
                                     <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted">
                                       {icons.camera("h-4 w-4")}

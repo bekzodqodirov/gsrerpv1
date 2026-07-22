@@ -87,6 +87,8 @@ async function main() {
 
   let reg = 90000;
   let created = 0;
+  // Mijoz bo'yicha uzluksiz harf hisoblagichi (A,B,C → keyingi yukda D,E...).
+  const letterCursor = new Map<string, number>();
   for (const [ci, whCode, status, daysAgo, lines] of ROWS) {
     const wh = whByCode.get(whCode);
     if (!wh) continue;
@@ -122,15 +124,18 @@ async function main() {
         })
         .returning();
 
+      const letterStart = letterCursor.get(clientId) ?? 0;
       let boxNo = 0;
       for (let i = 0; i < lines.length; i++) {
         const [name, n, l, w, h, kg] = lines[i];
-        const letter = letterCodeForIndex(i);
+        const seq = letterStart + i;
+        const letter = letterCodeForIndex(seq);
         const [line] = await tx
           .insert(cargoLines)
           .values({
             cargoId: cargo.id,
             lineNo: i + 1,
+            letterSeq: seq,
             letterCode: letter,
             productName: name,
             boxCount: n,
@@ -161,7 +166,18 @@ async function main() {
         data: { warehouse: wh.code, boxes: totalBoxes, demo: true },
       });
     });
+    letterCursor.set(clientId, (letterCursor.get(clientId) ?? 0) + lines.length);
     created += 1;
+  }
+
+  // Mijoz hisoblagichlarini yozib qo'yamiz — keyingi qabul harflari davom etsin.
+  for (const [clientId, seq] of letterCursor) {
+    if (seq > 0) {
+      await db
+        .update(clients)
+        .set({ lastLetterSeq: seq })
+        .where(eq(clients.id, clientId));
+    }
   }
 
   console.log(`+ ${created} namuna yuk qo'shildi (${CLIENTS.length} mijoz).`);
