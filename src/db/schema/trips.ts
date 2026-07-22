@@ -16,9 +16,10 @@ import {
   index,
   unique,
 } from "drizzle-orm/pg-core";
+import { integer } from "drizzle-orm/pg-core";
 import { warehouses, currencies } from "./catalog";
 import { users } from "./system";
-import { cargos, cargoBoxes } from "./cargo";
+import { cargos, cargoBoxes, cargoLines } from "./cargo";
 
 // Partiya bosqichlari:
 export const batchStatusEnum = pgEnum("batch_status", [
@@ -121,11 +122,43 @@ export const batchCargos = pgTable(
   ],
 );
 
+// ─── Partiya PLANI: tovar (qator) darajasida ─────────────────────────────────
+// Logist plan tuzayotganda PRIXOD emas, uning ichidagi TOVARLARDAN tanlaydi va
+// har tovardan NECHTA karobka yuklanishini belgilaydi ("50 tadan 25 tasi").
+// Ishchilar shu tovarning ISTALGAN karobkalarini scan qiladi — tizim kvotani
+// sanab boradi; kvota to'lgach ortiqcha scan sabab ko'rsatib rad etiladi.
+
+export const batchLines = pgTable(
+  "batch_line",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => batches.id, { onDelete: "cascade" }),
+    cargoId: uuid("cargo_id")
+      .notNull()
+      .references(() => cargos.id),
+    lineId: uuid("line_id")
+      .notNull()
+      .references(() => cargoLines.id),
+    // Shu tovardan nechta karobka yuklanishi rejalashtirilgan:
+    plannedBoxes: integer("planned_boxes").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("batch_line_batch_idx").on(t.batchId),
+    index("batch_line_line_idx").on(t.lineId),
+    unique("batch_line_uq").on(t.batchId, t.lineId),
+  ],
+);
+
 // ─── Partiya karobkalari (scan holati) ───────────────────────────────────────
-// Yuk partiyaga qo'shilganda uning har bir karobkasi uchun bitta qator ochiladi
-// (kutilayotgan manifest). Yuklashda skladchi har karobkani scan qiladi
-// (loadedScan), tushirishda yana scan qiladi (unloadedScan). Nomuvofiqlik:
-//   - kutilgan, lekin scan qilinmagan → yo'qolgan (missing)
+// Qator YUKLASH SCANIDA ochiladi (loadedScan=true) — ya'ni jadvalda faqat
+// haqiqatda mashinaga ortilgan karobkalar bo'ladi (plan kvotasi batch_line'da).
+// Tushirishda yana scan qilinadi (unloadedScan). Nomuvofiqlik:
+//   - yuklangan, lekin tushirishda scan qilinmagan → yo'qolgan (missing)
 //   - scan qilingan, lekin manifestda yo'q → ortiqcha (extra)
 //   - shikastlangan → damaged
 

@@ -2,12 +2,13 @@
 //
 // Kelishilgan narx (agreedPrice) — nozik ma'lumot. Faqat tms.manage huquqiga
 // ega foydalanuvchi ko'radi; sklad xodimiga hech qachon qaytarilmaydi.
-import { and, asc, count, desc, eq, inArray, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   carriers,
   batches,
   batchCargos,
+  batchLines,
   batchBoxes,
   cargos,
   cargoBoxes,
@@ -17,6 +18,8 @@ import {
   warehouses,
   auditLog,
   docSequences,
+  attachments,
+  users,
 } from "@/db/schema";
 import type { ScanResult } from "./dto";
 import { palletBoxIds } from "@/modules/repack/service";
@@ -136,7 +139,18 @@ export async function createBatch(input: BatchCreateInput) {
   });
   if (!origin || !dest) throw new Error("WAREHOUSE_NOT_FOUND");
 
-  const code = await nextBatchCode(origin.code);
+  // Partiya nomi: logist berganini ishlatamiz (takror bo'lmasin), bo'sh — avto.
+  let code: string;
+  if (data.code) {
+    code = data.code.toUpperCase();
+    const taken = await db.query.batches.findFirst({
+      where: eq(batches.code, code),
+      columns: { id: true },
+    });
+    if (taken) throw new Error("CODE_TAKEN");
+  } else {
+    code = await nextBatchCode(origin.code);
+  }
   const [b] = await db
     .insert(batches)
     .values({
@@ -278,56 +292,74 @@ export async function getBatch(id: string) {
       : Promise.resolve(null),
   ]);
 
-  const items = await db
+  // PLAN — tovar (qator) darajasida: zona bo'yicha tartiblangan ish varag'i.
+  const planRows = await db
     .select({
-      cargoId: cargos.id,
+      lineId: batchLines.lineId,
+      cargoId: batchLines.cargoId,
+      planned: batchLines.plannedBoxes,
+      letterCode: cargoLines.letterCode,
+      productName: cargoLines.productName,
+      lineBoxCount: cargoLines.boxCount,
+      lineKg: cargoLines.totalWeightKg,
+      lineM3: cargoLines.totalVolumeM3,
       regNumber: cargos.regNumber,
-      status: cargos.status,
-      boxes: cargos.totalBoxes,
-      kg: cargos.totalWeightKg,
-      m3: cargos.totalVolumeM3,
-      storageZone: cargos.storageZone,
-      scanned: batchCargos.scanned,
+      zone: cargos.storageZone,
       clientCode: clients.code,
       clientName: clients.name,
     })
-    .from(batchCargos)
-    .innerJoin(cargos, eq(batchCargos.cargoId, cargos.id))
+    .from(batchLines)
+    .innerJoin(cargoLines, eq(batchLines.lineId, cargoLines.id))
+    .innerJoin(cargos, eq(batchLines.cargoId, cargos.id))
     .innerJoin(clients, eq(cargos.clientId, clients.id))
-    .where(eq(batchCargos.batchId, id))
-    // Yuklash ro'yxati ZONA bo'yicha — skladchi tartib bilan yurib oladi.
-    .orderBy(asc(cargos.storageZone), asc(clients.code));
+    .where(eq(batchLines.batchId, id))
+    .orderBy(asc(cargos.storageZone), asc(clients.code), asc(cargoLines.lineNo));
 
-  const totals = items.reduce(
-    (t, i) => ({
-      cargoCount: t.cargoCount + 1,
-      boxes: t.boxes + i.boxes,
-      kg: t.kg + Number(i.kg),
-      m3: t.m3 + Number(i.m3),
-    }),
-    { cargoCount: 0, boxes: 0, kg: 0, m3: 0 },
-  );
+  // Rasmlar (har qatorning birinchisi):
+  const planLineIds = planRows.map((r) => r.lineId);
+  const photoRows = planLineIds.length
+    ? await db
+        .select({
+          entityId: attachments.entityId,
+          id: attachments.id,
+          mimeType: attachments.mimeType,
+        })
+        .from(attachments)
+        .where(
+          and(
+            eq(attachments.entity, "cargo_line"),
+            inArray(attachments.entityId, planLineIds),
+          ),
+        )
+        .orderBy(asc(attachments.createdAt))
+    : [];
+  const photoByLine = new Map<string, string>();
+  for (const p of photoRows) {
+    if (p.mimeType.startsWith("image/") && !photoByLine.has(p.entityId)) {
+      photoByLine.set(p.entityId, p.id);
+    }
+  }
 
-  // Karobka scan holati (yuklandi/tushirildi/yetishmadi) — yuk bo'yicha va jami.
+  // Scan holati — qator bo'yicha (batch_box'da faqat yuklangan karobkalar bor).
   const bbRows = await db
     .select({
-      cargoId: batchBoxes.cargoId,
+      lineId: cargoBoxes.lineId,
       loaded: batchBoxes.loadedScan,
       unloaded: batchBoxes.unloadedScan,
       flag: batchBoxes.flag,
     })
     .from(batchBoxes)
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
     .where(eq(batchBoxes.batchId, id));
-  const scanByCargo = new Map<
+  const scanByLine = new Map<
     string,
-    { total: number; loaded: number; unloaded: number; missing: number }
+    { loaded: number; unloaded: number; missing: number }
   >();
   let loadDone = 0;
   let unloadDone = 0;
   let missingTotal = 0;
   for (const r of bbRows) {
-    const s = scanByCargo.get(r.cargoId) ?? { total: 0, loaded: 0, unloaded: 0, missing: 0 };
-    s.total += 1;
+    const s = scanByLine.get(r.lineId) ?? { loaded: 0, unloaded: 0, missing: 0 };
     if (r.loaded) {
       s.loaded += 1;
       loadDone += 1;
@@ -340,9 +372,56 @@ export async function getBatch(id: string) {
       s.missing += 1;
       missingTotal += 1;
     }
-    scanByCargo.set(r.cargoId, s);
+    scanByLine.set(r.lineId, s);
   }
-  const boxTotal = bbRows.length;
+
+  // Kim nechta karobka yukladi (ishchilar hisobi):
+  const workerRows = await db
+    .select({
+      userId: batchBoxes.loadedBy,
+      fullName: users.fullName,
+      n: count(),
+    })
+    .from(batchBoxes)
+    .leftJoin(users, eq(batchBoxes.loadedBy, users.id))
+    .where(and(eq(batchBoxes.batchId, id), eq(batchBoxes.loadedScan, true)))
+    .groupBy(batchBoxes.loadedBy, users.fullName)
+    .orderBy(desc(count()));
+
+  const lines = planRows.map((r) => {
+    const perBoxKg = r.lineBoxCount ? Number(r.lineKg) / r.lineBoxCount : 0;
+    const perBoxM3 = r.lineBoxCount ? Number(r.lineM3) / r.lineBoxCount : 0;
+    const s = scanByLine.get(r.lineId) ?? { loaded: 0, unloaded: 0, missing: 0 };
+    return {
+      lineId: r.lineId,
+      cargoId: r.cargoId,
+      regNumber: r.regNumber,
+      zone: r.zone,
+      letterCode: r.letterCode,
+      productName: r.productName,
+      clientCode: r.clientCode,
+      clientName: r.clientName,
+      lineBoxCount: r.lineBoxCount,
+      planned: r.planned,
+      loaded: s.loaded,
+      unloaded: s.unloaded,
+      missing: s.missing,
+      plannedKg: perBoxKg * r.planned,
+      plannedM3: perBoxM3 * r.planned,
+      photoId: photoByLine.get(r.lineId) ?? null,
+    };
+  });
+
+  const planTotals = lines.reduce(
+    (t, l) => ({
+      lineCount: t.lineCount + 1,
+      boxes: t.boxes + l.planned,
+      kg: t.kg + l.plannedKg,
+      m3: t.m3 + l.plannedM3,
+    }),
+    { lineCount: 0, boxes: 0, kg: 0, m3: 0 },
+  );
+  const totalPlanned = planTotals.boxes;
 
   const showPrice = canSeePrice(session);
   return {
@@ -371,25 +450,19 @@ export async function getBatch(id: string) {
           capacityM3: carrier.capacityM3,
         }
       : null,
-    items: items.map((i) => ({
-      ...i,
-      kg: Number(i.kg),
-      m3: Number(i.m3),
-      scan: scanByCargo.get(i.cargoId) ?? {
-        total: i.boxes,
-        loaded: 0,
-        unloaded: 0,
-        missing: 0,
-      },
+    lines,
+    workers: workerRows.map((w) => ({
+      name: w.fullName ?? "—",
+      n: Number(w.n),
     })),
     totals: {
-      cargoCount: totals.cargoCount,
-      totalBoxes: totals.boxes,
-      totalWeightKg: Math.round(totals.kg * 1000) / 1000,
-      totalVolumeM3: Math.round(totals.m3 * 10000) / 10000,
+      lineCount: planTotals.lineCount,
+      totalBoxes: totalPlanned,
+      totalWeightKg: Math.round(planTotals.kg * 1000) / 1000,
+      totalVolumeM3: Math.round(planTotals.m3 * 10000) / 10000,
     },
-    loadProgress: { done: loadDone, total: boxTotal },
-    unloadProgress: { done: unloadDone, total: boxTotal },
+    loadProgress: { done: loadDone, total: totalPlanned },
+    unloadProgress: { done: unloadDone, total: bbRows.length },
     missingCount: missingTotal,
     canManage: session.perms.includes("*") || session.perms.includes("tms.manage"),
     canLoad:
@@ -399,8 +472,45 @@ export async function getBatch(id: string) {
   };
 }
 
-/** Origin ombordagi, hali ochiq partiyaga tegmagan, tayyor yuklar. */
-export async function getAvailableCargos(batchId: string) {
+// ─── Yuklash rejasi: TOVAR (qator) darajasida ────────────────────────────────
+
+/** Ochiq (planned/loading) partiyalarda band qilingan karobkalar soni — qator bo'yicha. */
+async function plannedInOpenBatches(
+  excludeBatchId?: string,
+): Promise<Map<string, number>> {
+  const conds = [inArray(batches.status, ["planned", "loading"])];
+  if (excludeBatchId) conds.push(ne(batchLines.batchId, excludeBatchId));
+  const rows = await db
+    .select({
+      lineId: batchLines.lineId,
+      planned: sql<number>`sum(${batchLines.plannedBoxes})::int`,
+    })
+    .from(batchLines)
+    .innerJoin(batches, eq(batchLines.batchId, batches.id))
+    .where(and(...conds))
+    .groupBy(batchLines.lineId);
+  return new Map(rows.map((r) => [r.lineId, Number(r.planned)]));
+}
+
+/** Shu partiyada qator bo'yicha haqiqatda scan qilingan (yuklangan) karobkalar. */
+async function scannedByLine(batchId: string): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      lineId: cargoBoxes.lineId,
+      n: count(),
+    })
+    .from(batchBoxes)
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)))
+    .groupBy(cargoBoxes.lineId);
+  return new Map(rows.map((r) => [r.lineId, Number(r.n)]));
+}
+
+/**
+ * Plan tuzish uchun: origin ombordagi TOVARLAR ro'yxati — rasm, nom, o'lchamlar,
+ * mavjud karobka soni (boshqa ochiq partiyalarga band qilinganlari ayirilgan).
+ */
+export async function getAvailableLines(batchId: string) {
   await requirePermission("tms.view");
   const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
   if (!b) return [];
@@ -410,40 +520,90 @@ export async function getAvailableCargos(batchId: string) {
   if (!origin) return [];
   const sourceStatus = sourceStatusForOrigin(origin.kind);
 
-  // Ochiq (yopilmagan) partiyalardagi yuklar — ular band:
-  const busy = await db
-    .select({ cargoId: batchCargos.cargoId })
-    .from(batchCargos)
-    .innerJoin(batches, eq(batchCargos.batchId, batches.id))
-    .where(ne(batches.status, "closed"));
-  const busyIds = busy.map((x) => x.cargoId);
-
-  const conds = [
-    eq(cargos.voided, false),
-    eq(cargos.status, sourceStatus),
-    eq(cargos.currentWarehouseId, b.originWarehouseId),
-  ];
-  if (busyIds.length) conds.push(notInArray(cargos.id, busyIds));
-
-  return db
+  const rows = await db
     .select({
+      lineId: cargoLines.id,
       cargoId: cargos.id,
       regNumber: cargos.regNumber,
-      boxes: cargos.totalBoxes,
-      kg: cargos.totalWeightKg,
-      m3: cargos.totalVolumeM3,
-      storageZone: cargos.storageZone,
+      zone: cargos.storageZone,
       receivedAt: cargos.receivedAt,
+      letterCode: cargoLines.letterCode,
+      productName: cargoLines.productName,
+      boxCount: cargoLines.boxCount,
+      lineKg: cargoLines.totalWeightKg,
+      lineM3: cargoLines.totalVolumeM3,
       clientCode: clients.code,
       clientName: clients.name,
     })
-    .from(cargos)
+    .from(cargoLines)
+    .innerJoin(cargos, eq(cargoLines.cargoId, cargos.id))
     .innerJoin(clients, eq(cargos.clientId, clients.id))
-    .where(and(...conds))
-    .orderBy(asc(cargos.receivedAt)); // FIFO
-}
+    .where(
+      and(
+        eq(cargos.voided, false),
+        eq(cargos.status, sourceStatus),
+        eq(cargos.currentWarehouseId, b.originWarehouseId),
+      ),
+    )
+    .orderBy(asc(cargos.receivedAt), asc(cargoLines.lineNo)); // FIFO
 
-// ─── Yuklash rejasi (add/remove) ─────────────────────────────────────────────
+  const planned = await plannedInOpenBatches();
+  const thisPlan = await db.query.batchLines.findMany({
+    where: eq(batchLines.batchId, batchId),
+    columns: { lineId: true, plannedBoxes: true },
+  });
+  const thisPlanMap = new Map(thisPlan.map((p) => [p.lineId, p.plannedBoxes]));
+
+  // Har qatorning birinchi rasmi (bitta so'rovda):
+  const lineIds = rows.map((r) => r.lineId);
+  const photoRows = lineIds.length
+    ? await db
+        .select({
+          entityId: attachments.entityId,
+          id: attachments.id,
+          mimeType: attachments.mimeType,
+        })
+        .from(attachments)
+        .where(
+          and(
+            eq(attachments.entity, "cargo_line"),
+            inArray(attachments.entityId, lineIds),
+          ),
+        )
+        .orderBy(asc(attachments.createdAt))
+    : [];
+  const photoByLine = new Map<string, string>();
+  for (const p of photoRows) {
+    if (p.mimeType.startsWith("image/") && !photoByLine.has(p.entityId)) {
+      photoByLine.set(p.entityId, p.id);
+    }
+  }
+
+  return rows
+    .map((r) => {
+      const inOpen = planned.get(r.lineId) ?? 0;
+      const available = r.boxCount - inOpen;
+      const perBoxKg = r.boxCount ? Number(r.lineKg) / r.boxCount : 0;
+      const perBoxM3 = r.boxCount ? Number(r.lineM3) / r.boxCount : 0;
+      return {
+        lineId: r.lineId,
+        cargoId: r.cargoId,
+        regNumber: r.regNumber,
+        zone: r.zone,
+        letterCode: r.letterCode,
+        productName: r.productName,
+        clientCode: r.clientCode,
+        clientName: r.clientName,
+        boxCount: r.boxCount,
+        availableBoxes: available,
+        plannedThisBatch: thisPlanMap.get(r.lineId) ?? 0,
+        perBoxKg,
+        perBoxM3,
+        photoId: photoByLine.get(r.lineId) ?? null,
+      };
+    })
+    .filter((r) => r.availableBoxes > 0);
+}
 
 async function assertPlannable(batchId: string) {
   const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
@@ -454,43 +614,94 @@ async function assertPlannable(batchId: string) {
   return b;
 }
 
-export async function addCargoToBatch(batchId: string, cargoId: string) {
-  await requireAny(["tms.manage", "tms.load"]);
+/**
+ * Plan qatorini o'rnatish: shu tovardan `boxes` ta karobka yuklanadi.
+ * Scan qilinganidan kam yoki mavjuddan ko'p qilib bo'lmaydi.
+ */
+export async function setPlanLine(
+  batchId: string,
+  lineId: string,
+  boxes: number,
+) {
+  const session = await requireAny(["tms.manage", "tms.load"]);
   const b = await assertPlannable(batchId);
-  const cargo = await db.query.cargos.findFirst({ where: eq(cargos.id, cargoId) });
-  if (!cargo) throw new Error("CARGO_NOT_FOUND");
+  assertWarehouseScope(session, b.originWarehouseId);
+  if (!Number.isInteger(boxes) || boxes < 1) throw new Error("BAD_COUNT");
+
+  const line = await db.query.cargoLines.findFirst({
+    where: eq(cargoLines.id, lineId),
+  });
+  if (!line) throw new Error("LINE_NOT_FOUND");
+  const cargo = await db.query.cargos.findFirst({
+    where: eq(cargos.id, line.cargoId),
+  });
+  if (!cargo || cargo.voided) throw new Error("CARGO_NOT_FOUND");
   if (cargo.currentWarehouseId !== b.originWarehouseId) {
     throw new Error("CARGO_NOT_AT_ORIGIN");
   }
+
+  const plannedElsewhere = (await plannedInOpenBatches(batchId)).get(lineId) ?? 0;
+  if (boxes > line.boxCount - plannedElsewhere) {
+    throw new Error("PLAN_EXCEEDS_AVAILABLE");
+  }
+  const scanned = (await scannedByLine(batchId)).get(lineId) ?? 0;
+  if (boxes < scanned) throw new Error("PLAN_BELOW_SCANNED");
+
   await db.transaction(async (tx) => {
     await tx
+      .insert(batchLines)
+      .values({ batchId, cargoId: line.cargoId, lineId, plannedBoxes: boxes })
+      .onConflictDoUpdate({
+        target: [batchLines.batchId, batchLines.lineId],
+        set: { plannedBoxes: boxes },
+      });
+    await tx
       .insert(batchCargos)
-      .values({ batchId, cargoId })
+      .values({ batchId, cargoId: line.cargoId })
       .onConflictDoNothing();
-    // Kutilayotgan manifest: shu yukning har bir karobkasi uchun bitta qator.
-    const boxes = await tx
-      .select({ id: cargoBoxes.id })
-      .from(cargoBoxes)
-      .where(eq(cargoBoxes.cargoId, cargoId));
-    if (boxes.length) {
-      await tx
-        .insert(batchBoxes)
-        .values(boxes.map((bx) => ({ batchId, boxId: bx.id, cargoId })))
-        .onConflictDoNothing();
-    }
   });
 }
 
-export async function removeCargoFromBatch(batchId: string, cargoId: string) {
-  await requireAny(["tms.manage", "tms.load"]);
-  await assertPlannable(batchId);
+/** Bir nechta plan qatorini birdan qo'shish (plan tuzuvchi UI uchun). */
+export async function addPlanLines(
+  batchId: string,
+  items: { lineId: string; boxes: number }[],
+) {
+  for (const it of items) {
+    await setPlanLine(batchId, it.lineId, it.boxes);
+  }
+}
+
+/** Plan qatorini olib tashlash — faqat hali scan boshlanmagan bo'lsa. */
+export async function removePlanLine(batchId: string, lineId: string) {
+  const session = await requireAny(["tms.manage", "tms.load"]);
+  const b = await assertPlannable(batchId);
+  assertWarehouseScope(session, b.originWarehouseId);
+  const scanned = (await scannedByLine(batchId)).get(lineId) ?? 0;
+  if (scanned > 0) throw new Error("HAS_SCANS");
+
+  const row = await db.query.batchLines.findFirst({
+    where: and(eq(batchLines.batchId, batchId), eq(batchLines.lineId, lineId)),
+  });
+  if (!row) return;
   await db.transaction(async (tx) => {
-    await tx
-      .delete(batchBoxes)
-      .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.cargoId, cargoId)));
-    await tx
-      .delete(batchCargos)
-      .where(and(eq(batchCargos.batchId, batchId), eq(batchCargos.cargoId, cargoId)));
+    await tx.delete(batchLines).where(eq(batchLines.id, row.id));
+    const left = await tx
+      .select({ n: count() })
+      .from(batchLines)
+      .where(
+        and(eq(batchLines.batchId, batchId), eq(batchLines.cargoId, row.cargoId)),
+      );
+    if (Number(left[0]?.n ?? 0) === 0) {
+      await tx
+        .delete(batchCargos)
+        .where(
+          and(
+            eq(batchCargos.batchId, batchId),
+            eq(batchCargos.cargoId, row.cargoId),
+          ),
+        );
+    }
   });
 }
 
@@ -514,15 +725,16 @@ async function boxLabel(boxId: string, done: number, total: number) {
 }
 
 async function loadProgress(batchId: string) {
+  // total = plan kvotalari yig'indisi; done = haqiqatda yuklangan karobkalar.
   const [tot] = await db
-    .select({ total: count() })
-    .from(batchBoxes)
-    .where(eq(batchBoxes.batchId, batchId));
+    .select({ total: sql<number>`coalesce(sum(${batchLines.plannedBoxes}), 0)::int` })
+    .from(batchLines)
+    .where(eq(batchLines.batchId, batchId));
   const [ld] = await db
     .select({ done: count() })
     .from(batchBoxes)
     .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
-  return { done: ld.done, total: tot.total };
+  return { done: Number(ld.done), total: Number(tot.total) };
 }
 
 async function unloadProgress(batchId: string) {
@@ -539,9 +751,9 @@ async function unloadProgress(batchId: string) {
 
 /** Yuklash scani: karobka QR kodini scan qiladi (kamera/skaner/qo'lda). */
 /**
- * Yashik (paddon) QR'i scan qilinganda: ichidagi BARCHA karobkani birvarakay
- * yuklaydi/tushiradi (qaror: yuklashda yashik QR'i scan qilinadi). Kod yashik
- * bo'lmasa null qaytaradi (chaqiruvchi oddiy karobka scaniga o'tadi).
+ * Yashik (paddon) QR'i scan qilinganda: ichidagi karobkalar birvarakay
+ * yuklanadi (plan kvotasi doirasida) yoki tushiriladi. Kod yashik bo'lmasa
+ * null qaytaradi (chaqiruvchi oddiy karobka scaniga o'tadi).
  */
 async function applyPalletScan(
   batchId: string,
@@ -551,56 +763,109 @@ async function applyPalletScan(
 ): Promise<ScanResult | null> {
   const pal = await palletBoxIds(code);
   if (!pal) return null; // yashik emas
-  const progress = mode === "load" ? loadProgress : unloadProgress;
-
   if (pal.boxIds.length === 0) {
-    const p = await progress(batchId);
-    return { outcome: "not_on_plan", code, done: p.done, total: p.total };
-  }
-
-  const doneCol =
-    mode === "load" ? batchBoxes.loadedScan : batchBoxes.unloadedScan;
-  const bbs = await db
-    .select({ id: batchBoxes.id, done: doneCol })
-    .from(batchBoxes)
-    .where(
-      and(eq(batchBoxes.batchId, batchId), inArray(batchBoxes.boxId, pal.boxIds)),
-    );
-
-  if (bbs.length === 0) {
     return { outcome: mode === "load" ? "not_on_plan" : "extra", code };
   }
-  const pending = bbs.filter((x) => !x.done).map((x) => x.id);
-  if (pending.length === 0) {
-    const p = await progress(batchId);
-    return { outcome: "duplicate", code, done: p.done, total: p.total };
+
+  if (mode === "unload") {
+    // Tushirish: partiyadagi (yuklangan) shu yashik karobkalarini belgilaymiz.
+    const bbs = await db
+      .select({ id: batchBoxes.id, done: batchBoxes.unloadedScan })
+      .from(batchBoxes)
+      .where(
+        and(
+          eq(batchBoxes.batchId, batchId),
+          inArray(batchBoxes.boxId, pal.boxIds),
+        ),
+      );
+    if (bbs.length === 0) return { outcome: "extra", code };
+    const pending = bbs.filter((x) => !x.done).map((x) => x.id);
+    if (pending.length === 0) {
+      const p = await unloadProgress(batchId);
+      return { outcome: "duplicate", code, done: p.done, total: p.total };
+    }
+    const now = new Date();
+    await db
+      .update(batchBoxes)
+      .set({ unloadedScan: true, unloadedAt: now, unloadedBy: userId, flag: null })
+      .where(inArray(batchBoxes.id, pending));
+    const p = await unloadProgress(batchId);
+    return {
+      outcome: "unloaded",
+      code,
+      done: p.done,
+      total: p.total,
+      label: `📦 ${code} · ${pending.length}`,
+    };
   }
 
-  const now = new Date();
-  await db
-    .update(batchBoxes)
-    .set(
-      mode === "load"
-        ? { loadedScan: true, loadedAt: now, loadedBy: userId, flag: null }
-        : { unloadedScan: true, unloadedAt: now, unloadedBy: userId, flag: null },
-    )
-    .where(inArray(batchBoxes.id, pending));
+  // Yuklash: yashik ichidagi karobkalarni plan kvotalari doirasida qo'shamiz.
+  const boxes = await db
+    .select({ id: cargoBoxes.id, lineId: cargoBoxes.lineId, cargoId: cargoBoxes.cargoId })
+    .from(cargoBoxes)
+    .where(inArray(cargoBoxes.id, pal.boxIds));
 
-  if (mode === "load") {
-    await db
+  const result = await db.transaction(async (tx): Promise<ScanResult> => {
+    // Kvota poygasini oldini olish: shu partiya plan qatorlarini qulflaymiz.
+    const plan = await tx
+      .select()
+      .from(batchLines)
+      .where(eq(batchLines.batchId, batchId))
+      .for("update");
+    const planByLine = new Map(plan.map((p) => [p.lineId, p.plannedBoxes]));
+
+    const scannedRows = await tx
+      .select({ lineId: cargoBoxes.lineId, boxId: batchBoxes.boxId })
+      .from(batchBoxes)
+      .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+      .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
+    const scannedByLineMap = new Map<string, number>();
+    const inBatch = new Set<string>();
+    for (const r of scannedRows) {
+      scannedByLineMap.set(r.lineId, (scannedByLineMap.get(r.lineId) ?? 0) + 1);
+      inBatch.add(r.boxId);
+    }
+
+    const now = new Date();
+    let added = 0;
+    let skipped = 0;
+    for (const bx of boxes) {
+      const planned = planByLine.get(bx.lineId);
+      const scanned = scannedByLineMap.get(bx.lineId) ?? 0;
+      if (planned == null || inBatch.has(bx.id) || scanned >= planned) {
+        skipped += 1;
+        continue;
+      }
+      await tx
+        .insert(batchBoxes)
+        .values({
+          batchId,
+          boxId: bx.id,
+          cargoId: bx.cargoId,
+          loadedScan: true,
+          loadedAt: now,
+          loadedBy: userId,
+        })
+        .onConflictDoNothing();
+      scannedByLineMap.set(bx.lineId, scanned + 1);
+      added += 1;
+    }
+    if (added === 0) {
+      return { outcome: "quota_full", code, label: `📦 ${code} · 0/+${skipped}` };
+    }
+    await tx
       .update(batches)
       .set({ status: "loading", updatedAt: now })
       .where(and(eq(batches.id, batchId), eq(batches.status, "planned")));
-  }
+    return {
+      outcome: "loaded",
+      code,
+      label: `📦 ${code} · +${added}${skipped ? ` (${skipped} o'tkazildi)` : ""}`,
+    };
+  });
 
-  const p = await progress(batchId);
-  return {
-    outcome: mode === "load" ? "loaded" : "unloaded",
-    code,
-    done: p.done,
-    total: p.total,
-    label: `📦 ${code} · ${pending.length}`,
-  };
+  const p = await loadProgress(batchId);
+  return { ...result, done: p.done, total: p.total };
 }
 
 export async function scanLoad(batchId: string, code: string): Promise<ScanResult> {
@@ -612,82 +877,137 @@ export async function scanLoad(batchId: string, code: string): Promise<ScanResul
     return { outcome: "wrong_status", code };
   }
 
-  // Shu partiya manifestidagi karobkani QR bo'yicha topamiz:
-  const rows = await db
-    .select({ bbId: batchBoxes.id, boxId: batchBoxes.boxId, loaded: batchBoxes.loadedScan })
-    .from(batchBoxes)
-    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
-    .where(and(eq(batchBoxes.batchId, batchId), eq(cargoBoxes.qrCode, code)))
+  // Karobkani QR bo'yicha topamiz (tovar/mijoz ma'lumoti bilan):
+  const boxRows = await db
+    .select({
+      boxId: cargoBoxes.id,
+      lineId: cargoBoxes.lineId,
+      cargoId: cargos.id,
+      cargoStatus: cargos.status,
+      cargoWh: cargos.currentWarehouseId,
+      product: cargoLines.productName,
+      letter: cargoLines.letterCode,
+      lineBoxCount: cargoLines.boxCount,
+      clientCode: clients.code,
+    })
+    .from(cargoBoxes)
+    .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
+    .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .where(eq(cargoBoxes.qrCode, code))
     .limit(1);
-  const hit = rows[0];
+  const box = boxRows[0];
 
-  if (!hit) {
-    // Yashik (paddon) QR'i bo'lishi mumkin — ichidagi hamma karobkani yuklaymiz.
+  if (!box) {
+    // Yashik (paddon) QR'i bo'lishi mumkin — ichidagilarni birga yuklaymiz.
     const pal = await applyPalletScan(batchId, code, "load", session.sub);
     if (pal) return pal;
+    return { outcome: "unknown", code };
+  }
 
-    // Planda yo'q karobka: agar u SHU skladda, jo'natishga tayyor va boshqa
-    // ochiq partiyaga band bo'lmasa — "planga qo'shish" taklif qilamiz
-    // (mashinada joy ortganda skladchi keyingi karobkani scan qilib to'ldiradi).
-    const known = await db
-      .select({
-        cargoId: cargos.id,
-        cargoStatus: cargos.status,
-        cargoWh: cargos.currentWarehouseId,
-        product: cargoLines.productName,
-        clientCode: clients.code,
-      })
-      .from(cargoBoxes)
-      .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
-      .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
-      .innerJoin(clients, eq(cargos.clientId, clients.id))
-      .where(eq(cargoBoxes.qrCode, code))
-      .limit(1);
-    const kb = known[0];
-    if (!kb) return { outcome: "unknown", code };
+  const label = `${box.clientCode}-${box.letter} · ${box.product}`;
 
+  // Bu tovar planda bormi?
+  const pl = await db.query.batchLines.findFirst({
+    where: and(eq(batchLines.batchId, batchId), eq(batchLines.lineId, box.lineId)),
+  });
+  if (!pl) {
+    // Planda yo'q tovar: shu skladda, tayyor va bo'sh joyi bo'lsa —
+    // "planga qo'shish" taklif qilamiz (joy ortganda shu bilan to'ldiriladi).
     const origin = await db.query.warehouses.findFirst({
       where: eq(warehouses.id, b.originWarehouseId),
     });
     const eligible =
       origin &&
-      kb.cargoWh === b.originWarehouseId &&
-      kb.cargoStatus === sourceStatusForOrigin(origin.kind);
+      box.cargoWh === b.originWarehouseId &&
+      box.cargoStatus === sourceStatusForOrigin(origin.kind);
     if (eligible) {
-      const busy = await db
-        .select({ id: batchCargos.batchId })
-        .from(batchCargos)
-        .innerJoin(batches, eq(batchCargos.batchId, batches.id))
-        .where(
-          and(eq(batchCargos.cargoId, kb.cargoId), ne(batches.status, "closed")),
-        )
-        .limit(1);
-      if (busy.length === 0) {
+      const remaining =
+        box.lineBoxCount - ((await plannedInOpenBatches()).get(box.lineId) ?? 0);
+      if (remaining > 0) {
         return {
           outcome: "can_add",
           code,
-          cargoId: kb.cargoId,
-          label: `${kb.clientCode} · ${kb.product}`,
+          cargoId: box.cargoId,
+          lineId: box.lineId,
+          label,
         };
       }
     }
-    return { outcome: "not_on_plan", code };
-  }
-  if (hit.loaded) {
-    const p = await loadProgress(batchId);
-    return { outcome: "duplicate", code, done: p.done, total: p.total };
+    return { outcome: "not_on_plan", code, label };
   }
 
-  await db
-    .update(batchBoxes)
-    .set({ loadedScan: true, loadedAt: new Date(), loadedBy: session.sub, flag: null })
-    .where(eq(batchBoxes.id, hit.bbId));
-  if (b.status === "planned") {
-    await db.update(batches).set({ status: "loading", updatedAt: new Date() }).where(eq(batches.id, batchId));
-  }
+  // Kvota nazorati — bir nechta skanner parallel ishlaganda ham aniq bo'lishi
+  // uchun plan qatori tranzaksiyada qulflanadi.
+  const result = await db.transaction(async (tx): Promise<ScanResult> => {
+    await tx
+      .select({ id: batchLines.id })
+      .from(batchLines)
+      .where(eq(batchLines.id, pl.id))
+      .for("update");
+
+    const dup = await tx.query.batchBoxes.findFirst({
+      where: and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.boxId, box.boxId)),
+    });
+    if (dup) return { outcome: "duplicate", code, label };
+
+    // Boshqa faol partiyada allaqachon yuklanganmi?
+    const other = await tx
+      .select({ id: batchBoxes.id })
+      .from(batchBoxes)
+      .innerJoin(batches, eq(batchBoxes.batchId, batches.id))
+      .where(
+        and(
+          eq(batchBoxes.boxId, box.boxId),
+          ne(batchBoxes.batchId, batchId),
+          ne(batches.status, "closed"),
+        ),
+      )
+      .limit(1);
+    if (other.length) return { outcome: "not_on_plan", code, label };
+
+    const [cnt] = await tx
+      .select({ n: count() })
+      .from(batchBoxes)
+      .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+      .where(
+        and(
+          eq(batchBoxes.batchId, batchId),
+          eq(cargoBoxes.lineId, box.lineId),
+          eq(batchBoxes.loadedScan, true),
+        ),
+      );
+    const scanned = Number(cnt?.n ?? 0);
+    if (scanned >= pl.plannedBoxes) {
+      // SABAB ko'rsatilgan rad: plan to'ldi — logist sonni oshirsagina o'tadi.
+      return {
+        outcome: "quota_full",
+        code,
+        label: `${label} — ${scanned}/${pl.plannedBoxes}`,
+      };
+    }
+
+    await tx.insert(batchBoxes).values({
+      batchId,
+      boxId: box.boxId,
+      cargoId: box.cargoId,
+      loadedScan: true,
+      loadedAt: new Date(),
+      loadedBy: session.sub,
+    });
+    await tx
+      .update(batches)
+      .set({ status: "loading", updatedAt: new Date() })
+      .where(and(eq(batches.id, batchId), eq(batches.status, "planned")));
+    return {
+      outcome: "loaded",
+      code,
+      label: `${label} · ${scanned + 1}/${pl.plannedBoxes}`,
+    };
+  });
 
   const p = await loadProgress(batchId);
-  return { outcome: "loaded", code, done: p.done, total: p.total, label: await boxLabel(hit.boxId, p.done, p.total) };
+  return { ...result, done: p.done, total: p.total };
 }
 
 /** Tushirish scani: manzilda karobkani scan qiladi (manifestga taqqoslaydi). */
@@ -777,68 +1097,63 @@ export async function departBatch(
   }
   if (prog.done === 0) throw new Error("NOTHING_SCANNED");
 
-  let leftBehind = 0;
+  const leftBehind = prog.total - prog.done;
   await db.transaction(async (tx) => {
-    // 1) Scan qilinmagan karobkalar — skladda qoladi:
-    //    - prixodning HAMMA karobkasi scan qilinmagan bo'lsa: prixod plandan
-    //      butunlay chiqariladi (skladda o'z holicha qolaveradi);
-    //    - QISMAN scan qilingan bo'lsa: prixod bo'linadi — scan qilinmaganlari
-    //      "qoldiq prixod" (reg-R1) bo'lib skladda qoladi.
-    const unscanned: { id: string; boxId: string; cargoId: string }[] = await tx
-      .select({
-        id: batchBoxes.id,
-        boxId: batchBoxes.boxId,
-        cargoId: batchBoxes.cargoId,
-      })
+    // Mashinada FAQAT batch_box'dagi (scan qilingan) karobkalar bor.
+    // Prixodning yuklanmagan karobkalari SKLADDA QOLADI:
+    //  - umuman yuklanmagan prixod → plandan chiqadi (skladda o'z holicha);
+    //  - qisman yuklangan → bo'linadi: qoldiq alohida prixod (reg-R1).
+    const loadedRows: { boxId: string; cargoId: string }[] = await tx
+      .select({ boxId: batchBoxes.boxId, cargoId: batchBoxes.cargoId })
       .from(batchBoxes)
-      .where(
-        and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, false)),
-      );
-    if (unscanned.length > 0) {
-      leftBehind = unscanned.length;
-      const planned: { cargoId: string; n: number }[] = await tx
-        .select({ cargoId: batchBoxes.cargoId, n: count() })
-        .from(batchBoxes)
-        .where(eq(batchBoxes.batchId, batchId))
-        .groupBy(batchBoxes.cargoId);
-      const plannedByCargo = new Map(planned.map((p) => [p.cargoId, Number(p.n)]));
+      .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
+    const loadedByCargo = new Map<string, Set<string>>();
+    for (const r of loadedRows) {
+      const s = loadedByCargo.get(r.cargoId) ?? new Set<string>();
+      s.add(r.boxId);
+      loadedByCargo.set(r.cargoId, s);
+    }
 
-      const byCargo = new Map<string, { bbIds: string[]; boxIds: string[] }>();
-      for (const u of unscanned) {
-        const g = byCargo.get(u.cargoId) ?? { bbIds: [], boxIds: [] };
-        g.bbIds.push(u.id);
-        g.boxIds.push(u.boxId);
-        byCargo.set(u.cargoId, g);
+    const planCargos: { cargoId: string }[] = await tx
+      .select({ cargoId: batchCargos.cargoId })
+      .from(batchCargos)
+      .where(eq(batchCargos.batchId, batchId));
+
+    for (const { cargoId } of planCargos) {
+      const loaded = loadedByCargo.get(cargoId);
+      if (!loaded || loaded.size === 0) {
+        // Umuman yuklanmagan — plandan chiqadi, skladda qoladi.
+        await tx
+          .delete(batchLines)
+          .where(
+            and(eq(batchLines.batchId, batchId), eq(batchLines.cargoId, cargoId)),
+          );
+        await tx
+          .delete(batchCargos)
+          .where(
+            and(
+              eq(batchCargos.batchId, batchId),
+              eq(batchCargos.cargoId, cargoId),
+            ),
+          );
+        continue;
       }
-
-      for (const [cargoId, g] of byCargo) {
-        if (g.boxIds.length === (plannedByCargo.get(cargoId) ?? 0)) {
-          // Umuman yuklanmagan prixod — plandan chiqadi, skladda qoladi.
-          await tx
-            .delete(batchBoxes)
-            .where(
-              and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.cargoId, cargoId)),
-            );
-          await tx
-            .delete(batchCargos)
-            .where(
-              and(
-                eq(batchCargos.batchId, batchId),
-                eq(batchCargos.cargoId, cargoId),
-              ),
-            );
-        } else {
-          // Qisman: qoldiq prixodga bo'linadi.
-          await splitCargoRemainder(tx, cargoId, g.boxIds, {
-            note: `${b.code} sig'madi — qoldiq`,
-            userId: session.sub,
-          });
-          await tx.delete(batchBoxes).where(inArray(batchBoxes.id, g.bbIds));
-        }
+      const allBoxes: { id: string }[] = await tx
+        .select({ id: cargoBoxes.id })
+        .from(cargoBoxes)
+        .where(eq(cargoBoxes.cargoId, cargoId));
+      if (loaded.size < allBoxes.length) {
+        const remainder = allBoxes
+          .filter((x) => !loaded.has(x.id))
+          .map((x) => x.id);
+        await splitCargoRemainder(tx, cargoId, remainder, {
+          note: `${b.code} — skladda qolgan qismi`,
+          userId: session.sub,
+        });
       }
     }
 
-    // 2) Qolgan (to'liq scan qilingan) yuklar jo'naydi.
+    // Jo'naydigan yuklar (yuklanganlari bor prixodlar).
     const items: { cargoId: string; status: string }[] = await tx
       .select({ cargoId: batchCargos.cargoId, status: cargos.status })
       .from(batchCargos)
@@ -876,15 +1191,22 @@ export async function departBatch(
 }
 
 /**
- * Scan-to-add: planda yo'q (lekin shu skladda bo'sh) karobka scan qilinganda
- * bir bosishda prixod planga qo'shilib, karobka darhol yuklanadi.
+ * Scan-to-add: planda yo'q tovar karobkasi scan qilinganda bir bosishda tovar
+ * (qator) planga to'liq mavjud soni bilan qo'shilib, karobka darhol yuklanadi.
  */
-export async function addCargoAndScanLoad(
+export async function addLineAndScanLoad(
   batchId: string,
-  cargoId: string,
+  lineId: string,
   code: string,
 ): Promise<ScanResult> {
-  await addCargoToBatch(batchId, cargoId); // ruxsat + plan holati + origin tekshiradi
+  const line = await db.query.cargoLines.findFirst({
+    where: eq(cargoLines.id, lineId),
+  });
+  if (!line) return { outcome: "unknown", code };
+  const available =
+    line.boxCount - ((await plannedInOpenBatches(batchId)).get(lineId) ?? 0);
+  if (available < 1) return { outcome: "not_on_plan", code };
+  await setPlanLine(batchId, lineId, available); // ruxsat/holat/origin tekshiradi
   return scanLoad(batchId, code);
 }
 

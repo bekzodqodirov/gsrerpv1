@@ -64,6 +64,13 @@
       "when": 1784719387579,
       "tag": "0008_windy_harpoon",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784722333747,
+      "tag": "0009_wealthy_eternity",
+      "breakpoints": true
     }
   ]
 }

@@ -5,8 +5,9 @@ import {
   createBatch,
   createCarrier,
   setCarrierActive,
-  addCargoToBatch,
-  removeCargoFromBatch,
+  setPlanLine,
+  addPlanLines,
+  removePlanLine,
   startLoading,
   departBatch,
   arriveBatch,
@@ -14,12 +15,13 @@ import {
   closeBatch,
   scanLoad,
   scanUnload,
-  addCargoAndScanLoad,
+  addLineAndScanLoad,
 } from "@/modules/tms/service";
 import {
   batchCreateSchema,
   carrierSchema,
   scanSchema,
+  planLinesSchema,
   type ScanResult,
 } from "@/modules/tms/dto";
 
@@ -39,6 +41,7 @@ export async function createBatchAction(
     originWarehouseId: str("originWarehouseId"),
     destinationWarehouseId: str("destinationWarehouseId"),
     carrierId: str("carrierId"),
+    code: str("code"),
     agreedPrice: str("agreedPrice") || undefined,
     currency: str("currency"),
     sealNumber: str("sealNumber"),
@@ -52,6 +55,7 @@ export async function createBatchAction(
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg === "SAME_WAREHOUSE") return { error: "sameWarehouse" };
+    if (msg === "CODE_TAKEN") return { error: "codeTaken" };
     console.error("[tms] createBatch:", e);
     return { error: "server" };
   }
@@ -91,13 +95,49 @@ export async function toggleCarrierActiveAction(id: string, isActive: boolean) {
 
 // ─── Yuklash rejasi va holat o'tishlari (id'lar bilan bind qilinadi) ─────────
 
-export async function addCargoAction(batchId: string, cargoId: string) {
-  await addCargoToBatch(batchId, cargoId);
-  revalidateTms();
+export type PlanActionResult = { ok?: boolean; error?: string };
+
+/** Plan tuzuvchidan: tanlangan tovarlarni belgilangan sonlar bilan qo'shish. */
+export async function addPlanLinesAction(
+  batchId: string,
+  items: { lineId: string; boxes: number }[],
+): Promise<PlanActionResult> {
+  const parsed = planLinesSchema.safeParse(items);
+  if (!parsed.success) return { error: "validation" };
+  try {
+    await addPlanLines(batchId, parsed.data);
+    revalidateTms();
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "PLAN_EXCEEDS_AVAILABLE") return { error: "exceedsAvailable" };
+    if (msg === "PLAN_BELOW_SCANNED") return { error: "belowScanned" };
+    console.error("[tms] addPlanLines:", e);
+    return { error: "server" };
+  }
 }
 
-export async function removeCargoAction(batchId: string, cargoId: string) {
-  await removeCargoFromBatch(batchId, cargoId);
+/** Plandagi tovar sonini o'zgartirish. */
+export async function setPlanLineAction(
+  batchId: string,
+  lineId: string,
+  boxes: number,
+): Promise<PlanActionResult> {
+  try {
+    await setPlanLine(batchId, lineId, boxes);
+    revalidateTms();
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "PLAN_EXCEEDS_AVAILABLE") return { error: "exceedsAvailable" };
+    if (msg === "PLAN_BELOW_SCANNED") return { error: "belowScanned" };
+    console.error("[tms] setPlanLine:", e);
+    return { error: "server" };
+  }
+}
+
+export async function removePlanLineAction(batchId: string, lineId: string) {
+  await removePlanLine(batchId, lineId);
   revalidateTms();
 }
 
@@ -160,15 +200,15 @@ export async function scanUnloadAction(
   return res;
 }
 
-/** Scan-to-add: "planga qo'shish" tugmasi — qo'shadi va darhol scan qiladi. */
-export async function addCargoAndScanAction(
+/** Scan-to-add: "planga qo'shish" tugmasi — tovarni qo'shadi va darhol scan qiladi. */
+export async function addLineAndScanAction(
   batchId: string,
-  cargoId: string,
+  lineId: string,
   code: string,
 ): Promise<ScanResult> {
   const parsed = scanSchema.safeParse({ code });
   if (!parsed.success) return { outcome: "unknown", code };
-  const res = await addCargoAndScanLoad(batchId, cargoId, parsed.data.code);
+  const res = await addLineAndScanLoad(batchId, lineId, parsed.data.code);
   revalidateTms();
   return res;
 }

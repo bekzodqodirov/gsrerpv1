@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/routing";
-import { getBatch, getAvailableCargos } from "@/modules/tms/service";
+import { getBatch, getAvailableLines } from "@/modules/tms/service";
 import { batchStatusColors } from "@/components/batch-status";
 import {
   Card,
@@ -15,18 +15,20 @@ import {
   EmptyRow,
 } from "@/components/ui";
 import { icons } from "@/components/icons";
+import { PhotoThumbs } from "@/components/photo-lightbox";
 import {
   startLoadingAction,
   departAction,
   arriveAction,
   unloadAction,
   closeAction,
-  addCargoAction,
-  removeCargoAction,
 } from "../actions";
 import { PrintButton } from "./print-button";
 import { ScanPanel } from "./scan-panel";
 import { DepartPartial } from "./depart-partial";
+import { PlanBuilder } from "./plan-builder";
+import { PlanLineControls } from "./plan-line-controls";
+import { AutoRefresh } from "./auto-refresh";
 
 export default async function BatchDetailPage({
   params,
@@ -40,14 +42,14 @@ export default async function BatchDetailPage({
   const locale = await getLocale();
   const t = await getTranslations("tms");
   const ts = await getTranslations("batchStatus");
-  const tcs = await getTranslations("cargoStatus");
 
   const {
     batch,
     origin,
     dest,
     carrier,
-    items,
+    lines,
+    workers,
     totals,
     canManage,
     canLoad,
@@ -63,14 +65,25 @@ export default async function BatchDetailPage({
   const unloadable = batch.status === "departed" || batch.status === "arrived";
   const loadComplete =
     loadProgress.total > 0 && loadProgress.done >= loadProgress.total;
-  const available =
-    editable && canLoad ? await getAvailableCargos(id) : [];
+  const available = editable && canLoad ? await getAvailableLines(id) : [];
 
   const capKg = carrier?.capacityKg ? Number(carrier.capacityKg) : null;
   const capM3 = carrier?.capacityM3 ? Number(carrier.capacityM3) : null;
 
+  const partialItems = lines
+    .filter((l) => l.loaded < l.planned)
+    .map((l) => ({
+      id: l.lineId,
+      title: `${l.clientCode}-${l.letterCode} · ${l.productName}`,
+      loaded: l.loaded,
+      planned: l.planned,
+    }));
+
   return (
     <div className="space-y-4">
+      {/* Ishchilar scan qilganda sahifa jonli yangilanib turadi */}
+      {(editable || unloadable) && canLoad && <AutoRefresh seconds={8} />}
+
       {/* ─── Sarlavha ─── */}
       <div className="print:hidden">
         <Link
@@ -93,9 +106,7 @@ export default async function BatchDetailPage({
               </Badge>
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm text-muted">
-              <span className="font-medium text-foreground">
-                {origin?.name}
-              </span>
+              <span className="font-medium text-foreground">{origin?.name}</span>
               <span>→</span>
               <span className="font-medium text-foreground">{dest?.name}</span>
             </div>
@@ -132,19 +143,10 @@ export default async function BatchDetailPage({
               (loadComplete ? (
                 <ActionForm action={departAction.bind(null, id)} label={t("depart")} />
               ) : loadProgress.done > 0 ? (
-                // Qisman yuklangan: tasdiq bilan jo'natish — scan qilinmaganlar qoladi.
                 <DepartPartial
                   batchId={id}
                   totalUnscanned={loadProgress.total - loadProgress.done}
-                  items={items
-                    .filter((i) => i.scan.loaded < i.scan.total)
-                    .map((i) => ({
-                      cargoId: i.cargoId,
-                      regNumber: i.regNumber,
-                      clientCode: i.clientCode,
-                      unscanned: i.scan.total - i.scan.loaded,
-                      total: i.scan.total,
-                    }))}
+                  items={partialItems}
                 />
               ) : (
                 <ActionForm
@@ -174,12 +176,10 @@ export default async function BatchDetailPage({
         )}
       </Card>
 
-      {/* ─── Sig'im to'ldirilishi ─── */}
+      {/* ─── Sig'im to'ldirilishi (plan bo'yicha) ─── */}
       {carrier && (capKg || capM3) && (
         <Card className="p-4 print:hidden">
-          <div className="mb-2 text-sm font-semibold text-muted">
-            {t("capacity")}
-          </div>
+          <div className="mb-2 text-sm font-semibold text-muted">{t("capacity")}</div>
           <div className="space-y-3">
             {capKg && (
               <FillBar
@@ -226,20 +226,50 @@ export default async function BatchDetailPage({
         </div>
       )}
 
-      {/* ─── Jamlar ─── */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* ─── Jamlar (plan) ─── */}
+      <div className="grid grid-cols-4 gap-3">
+        <StatCard value={num(totals.totalBoxes)} label={t("boxes")} />
         <StatCard value={num(totals.totalVolumeM3, 2)} label={`${t("volume")}, m³`} />
         <StatCard value={num(totals.totalWeightKg)} label={`${t("weight")}, kg`} />
-        <StatCard value={num(totals.cargoCount)} label={t("cargos")} />
+        <StatCard value={num(totals.lineCount)} label={t("products")} />
       </div>
 
-      {/* ─── Manifest (partiya tarkibi) ─── */}
+      {/* ─── Ishchilar hisobi: kim nechta karobka yukladi ─── */}
+      {workers.length > 0 && (
+        <Card className="p-3 print:hidden">
+          <div className="mb-1.5 text-[11px] font-bold tracking-wider text-muted uppercase">
+            {t("workers")}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {workers.map((w, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-sm"
+              >
+                {w.name}
+                <span className="font-mono font-bold tabular-nums text-primary">
+                  {w.n}
+                </span>
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* ─── Ish varag'i / manifest (tovar darajasida, zona tartibida) ─── */}
       <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-muted">
-            {t("manifest")}
-          </h2>
-          <PrintButton label={t("printManifest")} />
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-muted">{t("manifest")}</h2>
+          <div className="flex items-center gap-2 print:hidden">
+            <a
+              href={`/api/export?type=batchplan&batch=${id}`}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-medium hover:bg-surface-2"
+            >
+              {icons.stock("h-4 w-4")}
+              {t("excel")}
+            </a>
+            <PrintButton label={t("printManifest")} />
+          </div>
         </div>
         <div className="mb-2 hidden text-lg font-bold print:block">
           {t("manifest")} — {batch.code} ({origin?.name} → {dest?.name})
@@ -247,140 +277,122 @@ export default async function BatchDetailPage({
         <TableWrap>
           <thead>
             <tr>
+              <Th className="print:hidden">{t("photo")}</Th>
               <Th>{t("zone")}</Th>
-              <Th>{t("client")}</Th>
-              <Th>{t("regNumber")}</Th>
-              <Th>{t("status")}</Th>
-              <Th className="text-right">{t("boxes")}</Th>
+              <Th>{t("product")}</Th>
+              <Th className="text-right">{t("planCol")}</Th>
+              <Th className="text-right">{t("loadedCol")}</Th>
+              <Th className="text-right">{t("remainingCol")}</Th>
               <Th className="text-right">{t("weight")}</Th>
               <Th className="text-right">{t("volume")}</Th>
-              <Th className="text-center print:hidden">{t("scanCol")}</Th>
-              {editable && canLoad && <Th className="w-10 print:hidden" />}
+              {editable && canLoad && <Th className="w-24 print:hidden" />}
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
+            {lines.length === 0 ? (
               <EmptyRow colSpan={editable && canLoad ? 9 : 8} text={t("noCargo")} />
             ) : (
-              items.map((i) => (
-                <TRow key={i.cargoId}>
-                  <Td>
-                    {i.storageZone ? (
-                      <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
-                        {i.storageZone}
-                      </span>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </Td>
-                  <Td>
-                    <span className="font-mono text-xs font-bold">
-                      {i.clientCode}
-                    </span>
-                    <span className="ml-1.5 text-muted">{i.clientName}</span>
-                  </Td>
-                  <Td className="font-mono text-xs">{i.regNumber}</Td>
-                  <Td>
-                    <Badge className="bg-surface-2 text-muted">
-                      {tcs(i.status as "received_cn")}
-                    </Badge>
-                  </Td>
-                  <Td className="text-right font-mono tabular-nums">
-                    {num(i.boxes)}
-                  </Td>
-                  <Td className="text-right font-mono tabular-nums">
-                    {num(i.kg, 1)}
-                  </Td>
-                  <Td className="text-right font-mono tabular-nums">
-                    {num(i.m3, 2)}
-                  </Td>
-                  <Td className="text-center print:hidden">
-                    <ScanCell
-                      scan={i.scan}
-                      phase={unloadable || batch.status === "unloaded" ? "unload" : "load"}
-                    />
-                  </Td>
-                  {editable && canLoad && (
+              lines.map((l) => {
+                const remaining = Math.max(0, l.planned - l.loaded);
+                const complete = l.planned > 0 && l.loaded >= l.planned;
+                return (
+                  <TRow key={l.lineId}>
                     <Td className="print:hidden">
-                      <form action={removeCargoAction.bind(null, id, i.cargoId)}>
-                        <button
-                          type="submit"
-                          title={t("remove")}
-                          className="text-muted hover:text-red-600"
-                        >
-                          {icons.close("h-5 w-5")}
-                        </button>
-                      </form>
+                      {l.photoId ? (
+                        <PhotoThumbs
+                          photos={[{ id: l.photoId, name: l.productName }]}
+                          thumbClass="h-10 w-10"
+                        />
+                      ) : (
+                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted">
+                          {icons.camera("h-4 w-4")}
+                        </span>
+                      )}
                     </Td>
-                  )}
-                </TRow>
-              ))
-            )}
-          </tbody>
-        </TableWrap>
-      </div>
-
-      {/* ─── Ombordagi tayyor yuklar (qo'shish uchun) ─── */}
-      {editable && canLoad && (
-        <div className="print:hidden">
-          <h2 className="mb-2 text-sm font-semibold text-muted">
-            {t("availableAtOrigin", { wh: origin?.name ?? "" })}
-          </h2>
-          <TableWrap>
-            <thead>
-              <tr>
-                <Th>{t("zone")}</Th>
-                <Th>{t("client")}</Th>
-                <Th>{t("regNumber")}</Th>
-                <Th className="text-right">{t("boxes")}</Th>
-                <Th className="text-right">{t("weight")}</Th>
-                <Th className="text-right">{t("volume")}</Th>
-                <Th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {available.length === 0 ? (
-                <EmptyRow colSpan={7} text={t("noAvailable")} />
-              ) : (
-                available.map((c) => (
-                  <TRow key={c.cargoId}>
                     <Td>
-                      {c.storageZone ? (
+                      {l.zone ? (
                         <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
-                          {c.storageZone}
+                          {l.zone}
                         </span>
                       ) : (
                         <span className="text-muted">—</span>
                       )}
                     </Td>
                     <Td>
-                      <span className="font-mono text-xs font-bold">
-                        {c.clientCode}
+                      <div className="font-mono text-sm font-black">
+                        {l.clientCode}-{l.letterCode}
+                      </div>
+                      <div className="max-w-52 truncate text-sm">{l.productName}</div>
+                      <div className="font-mono text-[11px] text-muted">
+                        {l.regNumber}
+                        {l.missing > 0 && (
+                          <span className="ml-1.5 rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-700 dark:bg-red-900 dark:text-red-200">
+                            −{l.missing}
+                          </span>
+                        )}
+                      </div>
+                    </Td>
+                    <Td className="text-right font-mono tabular-nums">{num(l.planned)}</Td>
+                    <Td className="text-right">
+                      <span
+                        className={
+                          "font-mono font-semibold tabular-nums " +
+                          (complete ? "text-emerald-600" : "")
+                        }
+                      >
+                        {unloadable || batch.status === "unloaded"
+                          ? `${l.unloaded}/${l.loaded}`
+                          : num(l.loaded)}
                       </span>
-                      <span className="ml-1.5 text-muted">{c.clientName}</span>
                     </Td>
-                    <Td className="font-mono text-xs">{c.regNumber}</Td>
-                    <Td className="text-right font-mono tabular-nums">
-                      {num(c.boxes)}
+                    <Td className="text-right">
+                      {editable ? (
+                        remaining > 0 ? (
+                          <span className="rounded-md bg-amber-100 px-2 py-0.5 font-mono text-xs font-bold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                            {num(remaining)}
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-emerald-600">✓</span>
+                        )
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
                     </Td>
-                    <Td className="text-right font-mono tabular-nums">
-                      {num(Number(c.kg), 1)}
+                    <Td className="text-right font-mono text-xs tabular-nums">
+                      {num(l.plannedKg, 1)}
                     </Td>
-                    <Td className="text-right font-mono tabular-nums">
-                      {num(Number(c.m3), 2)}
+                    <Td className="text-right font-mono text-xs tabular-nums">
+                      {num(l.plannedM3, 2)}
                     </Td>
-                    <Td>
-                      <form action={addCargoAction.bind(null, id, c.cargoId)}>
-                        <Button type="submit" size="sm" variant="outline">
-                          {t("add")}
-                        </Button>
-                      </form>
-                    </Td>
+                    {editable && canLoad && (
+                      <Td className="print:hidden">
+                        <PlanLineControls
+                          batchId={id}
+                          lineId={l.lineId}
+                          planned={l.planned}
+                          loaded={l.loaded}
+                        />
+                      </Td>
+                    )}
                   </TRow>
-                ))
-              )}
-            </tbody>
-          </TableWrap>
+                );
+              })
+            )}
+          </tbody>
+        </TableWrap>
+      </div>
+
+      {/* ─── Plan tuzuvchi: ombordagi tovarlar (rasm/nom/o'lchamlar bilan) ─── */}
+      {editable && canLoad && (
+        <div className="print:hidden">
+          <PlanBuilder
+            batchId={id}
+            lines={available}
+            planKg={totals.totalWeightKg}
+            planM3={totals.totalVolumeM3}
+            capKg={capKg}
+            capM3={capM3}
+          />
         </div>
       )}
     </div>
@@ -406,34 +418,6 @@ function ActionForm({
         {label}
       </Button>
     </form>
-  );
-}
-
-function ScanCell({
-  scan,
-  phase,
-}: {
-  scan: { total: number; loaded: number; unloaded: number; missing: number };
-  phase: "load" | "unload";
-}) {
-  const done = phase === "load" ? scan.loaded : scan.unloaded;
-  const full = scan.total > 0 && done >= scan.total;
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span
-        className={
-          "font-mono text-xs tabular-nums " +
-          (full ? "font-semibold text-emerald-600" : "text-muted")
-        }
-      >
-        {done}/{scan.total}
-      </span>
-      {scan.missing > 0 && (
-        <span className="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-700 dark:bg-red-900 dark:text-red-200">
-          −{scan.missing}
-        </span>
-      )}
-    </span>
   );
 }
 

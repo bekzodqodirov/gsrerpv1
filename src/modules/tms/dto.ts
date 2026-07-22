@@ -24,12 +24,22 @@ export const batchCreateSchema = z.object({
   originWarehouseId: z.string().uuid(),
   destinationWarehouseId: z.string().uuid(),
   carrierId: z.string().uuid().optional().or(z.literal("")),
+  // Logist bergan erkin partiya nomi (bo'sh — avtomatik KA_001 tarzida):
+  code: z.string().trim().max(32).optional().or(z.literal("")),
   agreedPrice: z.coerce.number().nonnegative().max(1_000_000_000).optional(),
   currency: z.enum(["USD", "CNY", "UZS"]).optional().or(z.literal("")),
   sealNumber: z.string().trim().max(64).optional().or(z.literal("")),
   note: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 export type BatchCreateInput = z.infer<typeof batchCreateSchema>;
+
+// Plan qatori: qaysi tovardan nechta karobka.
+export const planLineSchema = z.object({
+  lineId: z.string().uuid(),
+  boxes: z.coerce.number().int().min(1).max(100_000),
+});
+export const planLinesSchema = z.array(planLineSchema).min(1).max(500);
+export type PlanLineInput = z.infer<typeof planLineSchema>;
 
 export const scanSchema = z.object({
   code: z.string().trim().min(3).max(64),
@@ -43,6 +53,7 @@ export type ScanOutcome =
   | "duplicate" //   allaqachon scan qilingan
   | "not_on_plan" // haqiqiy karobka, lekin bu partiyaga tegishli emas
   | "can_add" //     planda yo'q, LEKIN shu skladda bo'sh — planga qo'shsa bo'ladi
+  | "quota_full" //  bu tovarning plan kvotasi to'lgan — sabab ko'rsatib rad
   | "extra" //       manifestda yo'q karobka tushirildi (ortiqcha)
   | "unknown" //     bunday QR umuman topilmadi
   | "wrong_status"; // partiya holati scan qilishga mos emas
@@ -53,8 +64,9 @@ export type ScanResult = {
   label?: string; // "GSR-1007 · Mebel furnitura · 12/50"
   done?: number;
   total?: number;
-  // can_add uchun: qaysi prixodni planga qo'shish taklif qilinmoqda.
+  // can_add uchun: qaysi tovarni (qatorni) planga qo'shish taklif qilinmoqda.
   cargoId?: string;
+  lineId?: string;
 };
 
 /**

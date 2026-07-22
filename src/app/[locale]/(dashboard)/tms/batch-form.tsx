@@ -97,6 +97,9 @@ export function BatchForm({
             ))}
           </Select>
         </Field>
+        <Field label={t("batchCode")}>
+          <Input name="code" placeholder={t("batchCodePlaceholder")} maxLength={32} />
+        </Field>
         <Field label={t("agreedPrice")}>
           <Input
             name="agreedPrice"
@@ -120,7 +123,11 @@ export function BatchForm({
 
       {state.error && (
         <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {state.error === "sameWarehouse" ? t("sameWarehouse") : tc("loading")}
+          {state.error === "sameWarehouse"
+            ? t("sameWarehouse")
+            : state.error === "codeTaken"
+              ? t("codeTaken")
+              : tc("loading")}
         </p>
       )}
 

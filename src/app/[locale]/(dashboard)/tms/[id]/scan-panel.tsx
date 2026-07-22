@@ -9,7 +9,7 @@ import type { ScanResult } from "@/modules/tms/dto";
 import {
   scanLoadAction,
   scanUnloadAction,
-  addCargoAndScanAction,
+  addLineAndScanAction,
 } from "../actions";
 
 type Mode = "load" | "unload";
@@ -23,6 +23,7 @@ const OUTCOME_STYLE: Record<
   unloaded: { cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100", good: true },
   duplicate: { cls: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100", good: false },
   can_add: { cls: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100", good: false },
+  quota_full: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
   not_on_plan: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
   extra: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
   unknown: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
@@ -44,6 +45,12 @@ function beep(good: boolean) {
     o.onended = () => ctx.close();
   } catch {
     /* ovoz ixtiyoriy */
+  }
+  // Telefonda his qilinadigan javob: muvaffaqiyat — qisqa, xato — uzunroq.
+  try {
+    navigator.vibrate?.(good ? 80 : [80, 60, 160]);
+  } catch {
+    /* ixtiyoriy */
   }
 }
 
@@ -78,23 +85,41 @@ export function ScanPanel({
     result: ScanResult;
   } | null>(null);
   const [adding, setAdding] = useState(false);
+  // Katta ✓/✗ flash — ishchi uzoqdan ham natijani ko'rsin (1 soniya).
+  const [flash, setFlash] = useState<ScanResult | null>(null);
   const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
 
-  // Har javobdan keyin ovoz + inputni tozalab, fokusni qaytaramiz.
+  function showResult(r: ScanResult) {
+    beep(OUTCOME_STYLE[r.outcome]?.good ?? false);
+    setFlash(r);
+  }
+
+  // Har javobdan keyin ovoz + flash + inputni tozalab, fokusni qaytaramiz.
+  // (Scan natijasi — tashqi hodisa; flash shu hodisaga sinxronlanadi.)
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!state) return;
     beep(OUTCOME_STYLE[state.outcome]?.good ?? false);
+    setFlash(state);
     if (inputRef.current) inputRef.current.value = "";
     inputRef.current?.focus();
   }, [state]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Flash o'z-o'zidan yopiladi.
+  useEffect(() => {
+    if (!flash) return;
+    const tm = setTimeout(() => setFlash(null), 1200);
+    return () => clearTimeout(tm);
+  }, [flash]);
 
   async function handleAddToPlan(res: ScanResult) {
-    if (!res.cargoId || adding) return;
+    if (!res.lineId || adding) return;
     setAdding(true);
     try {
-      const r = await addCargoAndScanAction(batchId, res.cargoId, res.code);
+      const r = await addLineAndScanAction(batchId, res.lineId, res.code);
       setOverride({ base: res, result: r });
-      beep(OUTCOME_STYLE[r.outcome]?.good ?? false);
+      showResult(r);
     } finally {
       setAdding(false);
       inputRef.current?.focus();
@@ -110,6 +135,13 @@ export function ScanPanel({
 
     (async () => {
       try {
+        // HTTPS bo'lmagan (masalan LAN IP) sahifada brauzer kamerani BERMAYDI —
+        // aniq sabab ko'rsatamiz (aks holda jim ishlamay qo'yadi).
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setCamErr(t("cameraHttps"));
+          setCamOn(false);
+          return;
+        }
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
         });
@@ -247,6 +279,29 @@ export function ScanPanel({
       )}
 
       <p className="mt-2 text-xs text-muted">{t("scanHint")}</p>
+
+      {/* Katta natija flash'i — uzoqdan ko'rinadi (✓ yashil / ✗ qizil) */}
+      {flash && (
+        <div
+          className={
+            "pointer-events-none fixed inset-0 z-[90] flex flex-col items-center justify-center " +
+            (OUTCOME_STYLE[flash.outcome]?.good ? "bg-emerald-600/85" : "bg-red-600/85")
+          }
+        >
+          <span className="text-8xl font-black text-white">
+            {OUTCOME_STYLE[flash.outcome]?.good ? "✓" : "✗"}
+          </span>
+          <span className="mt-2 px-6 text-center text-xl font-bold text-white">
+            {t(("scan_" + flash.outcome) as "scan_loaded")}
+          </span>
+          {flash.label && (
+            <span className="mt-1 px-6 text-center text-sm font-medium text-white/90">
+              {flash.label}
+            </span>
+          )}
+          <span className="mt-1 font-mono text-xs text-white/75">{flash.code}</span>
+        </div>
+      )}
     </Card>
   );
 }

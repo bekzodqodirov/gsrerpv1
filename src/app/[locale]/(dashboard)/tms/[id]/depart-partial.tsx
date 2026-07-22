@@ -1,18 +1,17 @@
 "use client";
 
-// Qisman jo'natish tasdig'i: scan qilinmagan karobkalar RO'YXATI ko'rsatiladi —
-// ular skladda qoladi (qisman yuklangan prixod "qoldiq prixod"ga bo'linadi).
+// Qisman jo'natish tasdig'i: yuklanmagan karobkalar RO'YXATI ko'rsatiladi —
+// ular skladda qoladi (qisman yuklangan prixodlar "qoldiq prixod"ga bo'linadi).
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui";
 import { departPartialAction } from "../actions";
 
 export type PartialItem = {
-  cargoId: string;
-  regNumber: string;
-  clientCode: string;
-  unscanned: number;
-  total: number;
+  id: string;
+  title: string; // GSR-1001-B · Tovar nomi
+  loaded: number;
+  planned: number;
 };
 
 export function DepartPartial({
@@ -59,8 +58,10 @@ export function DepartPartial({
               <table className="w-full text-sm">
                 <thead className="bg-surface-2/60 text-left">
                   <tr>
-                    <th className="px-3 py-1.5 font-semibold">{t("client")}</th>
-                    <th className="px-3 py-1.5 font-semibold">{t("regNumber")}</th>
+                    <th className="px-3 py-1.5 font-semibold">{t("product")}</th>
+                    <th className="px-3 py-1.5 text-right font-semibold">
+                      {t("loadedCol")}
+                    </th>
                     <th className="px-3 py-1.5 text-right font-semibold">
                       {t("willStay")}
                     </th>
@@ -68,18 +69,17 @@ export function DepartPartial({
                 </thead>
                 <tbody>
                   {items.map((i) => (
-                    <tr key={i.cargoId} className="border-t border-line/60">
-                      <td className="px-3 py-1.5 font-mono text-xs font-bold">
-                        {i.clientCode}
+                    <tr key={i.id} className="border-t border-line/60">
+                      <td className="max-w-52 truncate px-3 py-1.5 text-xs font-medium">
+                        {i.title}
                       </td>
-                      <td className="px-3 py-1.5 font-mono text-xs">
-                        {i.regNumber}
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {i.loaded}/{i.planned}
                       </td>
                       <td className="px-3 py-1.5 text-right font-mono tabular-nums">
                         <span className="font-semibold text-amber-700 dark:text-amber-300">
-                          {i.unscanned}
+                          {i.planned - i.loaded}
                         </span>
-                        <span className="text-muted">/{i.total}</span>
                       </td>
                     </tr>
                   ))}

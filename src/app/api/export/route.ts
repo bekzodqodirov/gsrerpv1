@@ -7,11 +7,47 @@ import {
 } from "@/modules/finance/expenses";
 import { getDebtors } from "@/modules/finance/billing";
 import { getStockOverview } from "@/modules/stock/service";
+import { getBatch } from "@/modules/tms/service";
 
 export async function GET(req: Request) {
-  const type = new URL(req.url).searchParams.get("type") ?? "";
+  const url = new URL(req.url);
+  const type = url.searchParams.get("type") ?? "";
   try {
     switch (type) {
+      case "batchplan": {
+        const batchId = url.searchParams.get("batch") ?? "";
+        const data = await getBatch(batchId);
+        if (!data) return new Response("not found", { status: 404 });
+        return csvResponse(
+          `plan-${data.batch.code}.csv`,
+          toCsv(
+            [
+              "Zona",
+              "Mijoz",
+              "Kod",
+              "Tovar",
+              "Reg",
+              "Plan (karobka)",
+              "Yuklandi",
+              "Qoldi",
+              "Og'irlik kg (plan)",
+              "Hajm m3 (plan)",
+            ],
+            data.lines.map((l) => [
+              l.zone ?? "",
+              l.clientCode,
+              `${l.clientCode}-${l.letterCode}`,
+              l.productName,
+              l.regNumber,
+              l.planned,
+              l.loaded,
+              Math.max(0, l.planned - l.loaded),
+              Math.round(l.plannedKg * 1000) / 1000,
+              Math.round(l.plannedM3 * 10000) / 10000,
+            ]),
+          ),
+        );
+      }
       case "profitability": {
         const { rows } = await getBatchProfitability();
         return csvResponse(
