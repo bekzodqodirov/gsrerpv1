@@ -11,7 +11,9 @@
     "actions": "操作",
     "yes": "是",
     "no": "否",
-    "comingSoon": "该模块即将上线"
+    "comingSoon": "该模块即将上线",
+    "note": "备注",
+    "saved": "已保存"
   },
   "nav": {
     "dashboard": "首页",
@@ -309,7 +311,9 @@
     "cameraHttps": "相机仅支持 HTTPS。请用 `npm run dev:https` 启动或使用手持扫描枪",
     "planTitle": "装车计划",
     "currentPlan": "当前计划",
-    "scan_wrong_warehouse": "不属于您的仓库！"
+    "scan_wrong_warehouse": "不属于您的仓库！",
+    "editBatch": "编辑批次",
+    "notEditable": "此状态无法编辑"
   },
   "batchStatus": {
     "planned": "已计划",

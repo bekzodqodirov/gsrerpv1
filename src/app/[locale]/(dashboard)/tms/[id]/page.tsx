@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/routing";
-import { getBatch } from "@/modules/tms/service";
+import { getBatch, getBatchFormData } from "@/modules/tms/service";
 import { batchStatusColors } from "@/components/batch-status";
 import {
   Card,
@@ -27,6 +27,7 @@ import { PrintButton } from "./print-button";
 import { DepartPartial } from "./depart-partial";
 import { AutoRefresh } from "./auto-refresh";
 import { FillBar } from "./fill-bar";
+import { BatchEdit } from "./batch-edit";
 
 // Partiya OBZORI — holat, progress va boshqaruv. Ish sahifalari alohida:
 //   /tms/[id]/plan — plan tuzish,  /tms/[id]/scan — telefonda skanerlash.
@@ -75,6 +76,9 @@ export default async function BatchDetailPage({
   const scanPct = scanProg.total
     ? Math.min(100, (scanProg.done / scanProg.total) * 100)
     : 0;
+
+  // Tahrirlash formasi uchun ombor/mashina ro'yxati (faqat menejer, ochiq partiya).
+  const formData = canManage && editable ? await getBatchFormData() : null;
 
   const partialItems = lines
     .filter((l) => l.loaded < l.planned)
@@ -242,6 +246,26 @@ export default async function BatchDetailPage({
       {missingCount > 0 && (
         <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300 print:hidden">
           ⚠ {t("missingBoxes", { n: missingCount })}
+        </div>
+      )}
+
+      {/* ─── Partiyani tahrirlash (menejer, ochiq partiya) ─── */}
+      {formData && (
+        <div className="print:hidden">
+          <BatchEdit
+            batchId={batch.id}
+            originId={origin?.id ?? ""}
+            current={{
+              destinationId: dest?.id ?? null,
+              carrierId: carrier?.id ?? null,
+              sealNumber: batch.sealNumber,
+              agreedPrice: batch.agreedPrice,
+              currency: batch.currency,
+              note: batch.note,
+            }}
+            warehouses={formData.warehouses}
+            carriers={formData.carriers}
+          />
         </div>
       )}
 

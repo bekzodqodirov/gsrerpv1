@@ -30,10 +30,12 @@ import { nextNumber } from "@/modules/shared/numbering";
 import {
   carrierSchema,
   batchCreateSchema,
+  batchUpdateSchema,
   legStatuses,
   sourceStatusForOrigin,
   type CarrierInput,
   type BatchCreateInput,
+  type BatchUpdateInput,
 } from "./dto";
 
 // ─── Huquq yordamchilari ─────────────────────────────────────────────────────
@@ -174,6 +176,49 @@ export async function createBatch(input: BatchCreateInput) {
     payload: { code, origin: origin.code, dest: dest.code },
   });
   return b;
+}
+
+/** Partiyani tahrirlash — FAQAT planned/loading holatida (jo'nagach o'zgarmaydi).
+ * Origin o'zgarmaydi (plan o'sha ombor qoldig'iga bog'liq); manzil, mashina,
+ * plomba, narx, izoh o'zgartiriladi. Mashinani keyin biriktirish shu orqali. */
+export async function updateBatch(id: string, input: BatchUpdateInput) {
+  const session = await requirePermission("tms.manage");
+  const data = batchUpdateSchema.parse(input);
+
+  const b = await db.query.batches.findFirst({ where: eq(batches.id, id) });
+  if (!b) throw new Error("NOT_FOUND");
+  if (b.status !== "planned" && b.status !== "loading") {
+    throw new Error("NOT_EDITABLE");
+  }
+  if (data.destinationWarehouseId === b.originWarehouseId) {
+    throw new Error("SAME_WAREHOUSE");
+  }
+  const dest = await db.query.warehouses.findFirst({
+    where: eq(warehouses.id, data.destinationWarehouseId),
+  });
+  if (!dest) throw new Error("WAREHOUSE_NOT_FOUND");
+
+  await db
+    .update(batches)
+    .set({
+      destinationWarehouseId: dest.id,
+      carrierId: data.carrierId || null,
+      agreedPrice: data.agreedPrice != null ? String(data.agreedPrice) : null,
+      currency: data.currency || null,
+      sealNumber: data.sealNumber || null,
+      note: data.note || null,
+      updatedAt: new Date(),
+    })
+    .where(eq(batches.id, id));
+
+  await db.insert(auditLog).values({
+    userId: session.sub,
+    action: "update",
+    entity: "batch",
+    entityId: id,
+    payload: { dest: dest.code, carrier: data.carrierId || null },
+  });
+  return { id };
 }
 
 /** Partiyalar ro'yxati. Sklad XODIMIGA faqat o'z omboriga tegishlilari —

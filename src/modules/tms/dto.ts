@@ -33,6 +33,18 @@ export const batchCreateSchema = z.object({
 });
 export type BatchCreateInput = z.infer<typeof batchCreateSchema>;
 
+// Partiyani yaratgandan keyin tahrirlash (faqat planned/loading holatida).
+// Origin o'zgartirilmaydi — plan o'sha ombordagi qoldiqqa bog'liq.
+export const batchUpdateSchema = z.object({
+  destinationWarehouseId: z.string().uuid(),
+  carrierId: z.string().uuid().optional().or(z.literal("")),
+  agreedPrice: z.coerce.number().nonnegative().max(1_000_000_000).optional(),
+  currency: z.enum(["USD", "CNY", "UZS"]).optional().or(z.literal("")),
+  sealNumber: z.string().trim().max(64).optional().or(z.literal("")),
+  note: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+export type BatchUpdateInput = z.infer<typeof batchUpdateSchema>;
+
 // Plan qatori: qaysi tovardan nechta karobka.
 export const planLineSchema = z.object({
   lineId: z.string().uuid(),

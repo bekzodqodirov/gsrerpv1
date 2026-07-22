@@ -11,7 +11,9 @@
     "actions": "Amallar",
     "yes": "Ha",
     "no": "Yo'q",
-    "comingSoon": "Bu bo'lim tez orada ishga tushadi"
+    "comingSoon": "Bu bo'lim tez orada ishga tushadi",
+    "note": "Izoh",
+    "saved": "Saqlandi"
   },
   "nav": {
     "dashboard": "Bosh sahifa",
@@ -309,7 +311,9 @@
     "cameraHttps": "Kamera faqat HTTPS'da ishlaydi. Serverni `npm run dev:https` bilan oching yoki qo'l skaneridan foydalaning",
     "planTitle": "Yuklash plani",
     "currentPlan": "Joriy plan",
-    "scan_wrong_warehouse": "bu sizning skladingiz uchun emas!"
+    "scan_wrong_warehouse": "bu sizning skladingiz uchun emas!",
+    "editBatch": "Partiyani tahrirlash",
+    "notEditable": "Bu holatda tahrirlab bo'lmaydi"
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

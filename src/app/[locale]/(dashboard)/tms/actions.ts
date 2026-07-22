@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   createBatch,
+  updateBatch,
   createCarrier,
   setCarrierActive,
   setPlanLine,
@@ -19,6 +20,7 @@ import {
 } from "@/modules/tms/service";
 import {
   batchCreateSchema,
+  batchUpdateSchema,
   carrierSchema,
   scanSchema,
   planLinesSchema,
@@ -57,6 +59,35 @@ export async function createBatchAction(
     if (msg === "SAME_WAREHOUSE") return { error: "sameWarehouse" };
     if (msg === "CODE_TAKEN") return { error: "codeTaken" };
     console.error("[tms] createBatch:", e);
+    return { error: "server" };
+  }
+}
+
+export async function updateBatchAction(
+  batchId: string,
+  _prev: BatchFormState,
+  formData: FormData,
+): Promise<BatchFormState> {
+  const str = (k: string) => String(formData.get(k) ?? "");
+  const parsed = batchUpdateSchema.safeParse({
+    destinationWarehouseId: str("destinationWarehouseId"),
+    carrierId: str("carrierId"),
+    agreedPrice: str("agreedPrice") || undefined,
+    currency: str("currency"),
+    sealNumber: str("sealNumber"),
+    note: str("note"),
+  });
+  if (!parsed.success) return { error: "validation" };
+  try {
+    await updateBatch(batchId, parsed.data);
+    revalidateTms();
+    revalidatePath(`/[locale]/tms/${batchId}`, "page");
+    return { createdId: batchId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "SAME_WAREHOUSE") return { error: "sameWarehouse" };
+    if (msg === "NOT_EDITABLE") return { error: "notEditable" };
+    console.error("[tms] updateBatch:", e);
     return { error: "server" };
   }
 }
