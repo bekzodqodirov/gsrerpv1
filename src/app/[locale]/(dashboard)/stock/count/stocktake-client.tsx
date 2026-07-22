@@ -263,7 +263,7 @@ export function StocktakeClient({
             <button
               type="button"
               onClick={() => setCamOn((v) => !v)}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              className="touch-manipulation mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
             >
               {icons.camera("h-4 w-4")}
               {camOn ? L.stopCamera : L.camera}

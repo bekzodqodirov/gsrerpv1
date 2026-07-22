@@ -31,6 +31,7 @@ export function Button({
   variant = "primary",
   size = "md",
   className,
+  type = "button",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
@@ -38,8 +39,11 @@ export function Button({
 }) {
   return (
     <button
+      type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50",
+        // touch-manipulation: mobil brauzerda pull-to-refresh yoki
+        // double-tap-zoom bosishni "yutib qo'ymasin" — barcha tugmalar uchun.
+        "touch-manipulation inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50",
         buttonVariants[variant],
         buttonSizes[size],
         className,
@@ -139,7 +143,7 @@ export function CollapsibleCard({
       open={defaultOpen}
       className="group rounded-xl border border-line bg-surface shadow-sm"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold select-none hover:bg-surface-2 group-open:rounded-b-none">
+      <summary className="touch-manipulation flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold select-none hover:bg-surface-2 group-open:rounded-b-none">
         <span className="flex items-center gap-2">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary-soft text-primary">
             <svg

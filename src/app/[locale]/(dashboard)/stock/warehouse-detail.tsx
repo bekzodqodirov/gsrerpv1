@@ -292,7 +292,7 @@ export function WarehouseDetail({
               type="button"
               onClick={() => setTab(tb.key)}
               className={
-                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors " +
+                "touch-manipulation rounded-lg px-3 py-1.5 text-sm font-medium transition-colors " +
                 (tab === tb.key
                   ? "bg-primary text-white"
                   : "bg-surface-2 text-muted hover:text-foreground")
@@ -324,7 +324,7 @@ export function WarehouseDetail({
             type="button"
             onClick={() => setAge(a)}
             className={
-              "rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors " +
+              "touch-manipulation rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors " +
               (age === a
                 ? "bg-foreground text-surface"
                 : "bg-surface-2 text-muted hover:text-foreground")

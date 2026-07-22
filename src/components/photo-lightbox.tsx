@@ -35,7 +35,7 @@ export function PhotoThumbs({
               e.stopPropagation();
               setOpenIdx(i);
             }}
-            className={`block overflow-hidden rounded-lg border border-line transition-transform hover:scale-105 ${thumbClass}`}
+            className={`touch-manipulation block overflow-hidden rounded-lg border border-line transition-transform hover:scale-105 ${thumbClass}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -103,7 +103,7 @@ function Lightbox({
         type="button"
         onClick={onClose}
         aria-label="close"
-        className="absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+        className="touch-manipulation absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
       >
         {icons.close("h-5 w-5")}
       </button>
@@ -116,7 +116,7 @@ function Lightbox({
             prev();
           }}
           aria-label="previous"
-          className="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl text-white hover:bg-white/20"
+          className="touch-manipulation absolute left-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl text-white hover:bg-white/20"
         >
           ‹
         </button>
@@ -152,7 +152,7 @@ function Lightbox({
             next();
           }}
           aria-label="next"
-          className="absolute right-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl text-white hover:bg-white/20"
+          className="touch-manipulation absolute right-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl text-white hover:bg-white/20"
         >
           ›
         </button>

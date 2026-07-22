@@ -158,7 +158,7 @@ export function DataTable<T>({
             type="button"
             onClick={() => setShowFilters((v) => !v)}
             className={
-              "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors " +
+              "touch-manipulation inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors " +
               (showFilters || activeFilterCount
                 ? "border-primary/50 bg-primary-soft text-primary"
                 : "border-line hover:bg-surface-2")
@@ -178,7 +178,7 @@ export function DataTable<T>({
           <button
             type="button"
             onClick={() => setShowCols((v) => !v)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-sm font-medium hover:bg-surface-2"
+            className="touch-manipulation inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-sm font-medium hover:bg-surface-2"
           >
             {icons.settings("h-4 w-4")}
             <span className="hidden sm:inline">{L.columns}</span>
@@ -229,7 +229,7 @@ export function DataTable<T>({
           <button
             type="button"
             onClick={resetAll}
-            className="inline-flex h-9 items-center rounded-lg px-2.5 text-sm font-medium text-muted hover:text-foreground"
+            className="touch-manipulation inline-flex h-9 items-center rounded-lg px-2.5 text-sm font-medium text-muted hover:text-foreground"
           >
             {L.reset}
           </button>
@@ -331,7 +331,7 @@ export function DataTable<T>({
                               e.stopPropagation();
                               setExpanded(isOpen ? null : key);
                             }}
-                            className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-surface-2"
+                            className="touch-manipulation flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-surface-2"
                           >
                             <svg
                               viewBox="0 0 16 16"
@@ -416,7 +416,7 @@ export function DataTable<T>({
                       type="button"
                       aria-label="expand"
                       onClick={() => setExpanded(isOpen ? null : key)}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-2"
+                      className="touch-manipulation flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-2"
                     >
                       <svg
                         viewBox="0 0 16 16"

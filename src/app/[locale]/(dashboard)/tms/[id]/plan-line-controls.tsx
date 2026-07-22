@@ -71,7 +71,7 @@ export function PlanLineControls({
         onClick={remove}
         disabled={pending || loaded > 0}
         title={loaded > 0 ? t("hasScans") : t("remove")}
-        className="text-muted hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+        className="touch-manipulation text-muted hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
       >
         {icons.close("h-4.5 w-4.5")}
       </button>
