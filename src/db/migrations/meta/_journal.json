@@ -78,6 +78,13 @@
       "when": 1784730000000,
       "tag": "0010_return_status",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784730500000,
+      "tag": "0011_box_uid",
+      "breakpoints": true
     }
   ]
 }

@@ -49,6 +49,7 @@ export default async function CargoLabelsPage({
     letterCode: b.letterCode,
     productName: b.productName,
     qrCode: b.qrCode,
+    boxUid: b.boxUid,
     position: b.position,
     boxCount: b.boxCount,
     qrDataUrl: b.qrDataUrl,

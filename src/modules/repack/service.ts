@@ -1,6 +1,6 @@
 // Qayta upakovka servisi: tahta yashik yaratish, karobkalarni scan bilan solish,
 // yashikni yopish, ro'yxat/tafsilot. Har amal cargo.move huquqini talab qiladi.
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   pallets,
@@ -219,7 +219,12 @@ export async function packBox(palletId: string, qrCode: string): Promise<PackRes
     .from(cargoBoxes)
     .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
     .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
-    .where(eq(cargoBoxes.qrCode, code))
+    // Skaner MATN QR yoki QISQA RAQAMLI ID (box_uid) — ikkalasini ham qidiramiz.
+    .where(
+      /^\d+$/.test(code) && Number.isSafeInteger(Number(code))
+        ? or(eq(cargoBoxes.qrCode, code), eq(cargoBoxes.boxUid, Number(code)))
+        : eq(cargoBoxes.qrCode, code),
+    )
     .limit(1);
   const box = rows[0];
   if (!box) return { outcome: "unknown", code };

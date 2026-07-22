@@ -539,6 +539,7 @@ export async function getCargoBoxes(cargoId: string) {
       lineId: cargoBoxes.lineId,
       boxNo: cargoBoxes.boxNo,
       qrCode: cargoBoxes.qrCode,
+      boxUid: cargoBoxes.boxUid,
       letterCode: cargoLines.letterCode,
       productName: cargoLines.productName,
       boxCount: cargoLines.boxCount,

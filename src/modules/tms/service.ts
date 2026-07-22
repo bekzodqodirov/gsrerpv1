@@ -57,6 +57,21 @@ async function requireAny(codes: string[]): Promise<SessionPayload> {
   throw new Error(`FORBIDDEN: ${codes.join("|")}`);
 }
 
+/**
+ * Skaner kodi karobkani MATN QR (YK-...-B037) yoki QISQA RAQAMLI global ID
+ * (box_uid, RFID/EPC ga mos) bo'yicha topadi — ikkalasi ham qabul qilinadi.
+ */
+function boxCodeCond(code: string) {
+  const c = code.trim();
+  if (/^\d+$/.test(c)) {
+    const uid = Number(c);
+    if (Number.isSafeInteger(uid)) {
+      return or(eq(cargoBoxes.qrCode, c), eq(cargoBoxes.boxUid, uid))!;
+    }
+  }
+  return eq(cargoBoxes.qrCode, c);
+}
+
 // ─── Carriers ────────────────────────────────────────────────────────────────
 
 export async function listCarriers() {
@@ -1055,7 +1070,7 @@ export async function scanLoad(batchId: string, code: string): Promise<ScanResul
     .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
     .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
     .innerJoin(clients, eq(cargos.clientId, clients.id))
-    .where(eq(cargoBoxes.qrCode, code))
+    .where(boxCodeCond(code))
     .limit(1);
   const box = boxRows[0];
 
@@ -1185,7 +1200,7 @@ export async function scanUnload(batchId: string, code: string): Promise<ScanRes
     .select({ bbId: batchBoxes.id, boxId: batchBoxes.boxId, unloaded: batchBoxes.unloadedScan })
     .from(batchBoxes)
     .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
-    .where(and(eq(batchBoxes.batchId, batchId), eq(cargoBoxes.qrCode, code)))
+    .where(and(eq(batchBoxes.batchId, batchId), boxCodeCond(code)))
     .limit(1);
   const hit = rows[0];
 
@@ -1194,7 +1209,7 @@ export async function scanUnload(batchId: string, code: string): Promise<ScanRes
     const pal = await applyPalletScan(batchId, code, "unload", session.sub);
     if (pal) return pal;
     // Manifestda yo'q: ortiqcha (boshqa partiya karobkasi) yoki noma'lum.
-    const known = await db.query.cargoBoxes.findFirst({ where: eq(cargoBoxes.qrCode, code) });
+    const known = await db.query.cargoBoxes.findFirst({ where: boxCodeCond(code) });
     return { outcome: known ? "extra" : "unknown", code };
   }
   if (hit.unloaded) {

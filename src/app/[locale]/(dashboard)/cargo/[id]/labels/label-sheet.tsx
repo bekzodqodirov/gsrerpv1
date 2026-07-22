@@ -11,6 +11,7 @@ type Label = {
   letterCode: string;
   productName: string;
   qrCode: string;
+  boxUid: number;
   position: number;
   boxCount: number;
   qrDataUrl: string;
@@ -178,7 +179,9 @@ export function LabelSheet({
           const codeText = `${b.clientCode}-${b.letterCode}`;
           const codeFont = fitFont(m.hB, m.cw - 2 * m.padX, codeText);
           const footPadX = m.cw * 0.03;
-          const footFont = fitFont(m.hD, m.cw - 2 * footPadX, b.qrCode);
+          // Pastki qatorda QISQA RAQAMLI ID (tez o'qish/RFID) + matn kod.
+          const footText = `#${b.boxUid} · ${b.qrCode}`;
+          const footFont = fitFont(m.hD, m.cw - 2 * footPadX, footText);
           return (
             <div className="lbl-wrap" key={b.key}>
               <div className="lbl-card">
@@ -198,7 +201,7 @@ export function LabelSheet({
                   <div className="lbl-prod">{b.productName}</div>
                 </div>
                 <div className="lbl-foot">
-                  <span style={{ fontSize: `${footFont}mm` }}>{b.qrCode}</span>
+                  <span style={{ fontSize: `${footFont}mm` }}>{footText}</span>
                 </div>
               </div>
             </div>

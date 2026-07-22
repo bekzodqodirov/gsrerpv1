@@ -16,6 +16,7 @@ import {
   timestamp,
   numeric,
   integer,
+  bigint,
   jsonb,
   boolean,
   pgEnum,
@@ -24,6 +25,7 @@ import {
   customType,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { clients, warehouses } from "./catalog";
 import { users } from "./system";
 
@@ -199,6 +201,12 @@ export const cargoBoxes = pgTable(
     // tartib raqami). Global unique — scan qilinganda aynan bitta karobkaga
     // ishora qiladi (yuklash/tushirishda har karobka alohida scan qilinadi).
     qrCode: varchar("qr_code", { length: 64 }).notNull(),
+    // QISQA raqamli global ID — RFID (EPC) ga mos, tez scan/qidiruv uchun.
+    // Ketma-ket (100000 dan) beriladi; skaner MATN kodini ham, shu raqamni ham
+    // qabul qiladi (kelajakda RFID tag'ga shu raqam yoziladi).
+    boxUid: bigint("box_uid", { mode: "number" })
+      .notNull()
+      .default(sql`nextval('box_uid_seq')`),
     // Qayta upakovkada paddonga biriktiriladi:
     palletId: uuid("pallet_id").references(() => pallets.id),
     // damaged | missing kabi belgi (istisno holatlar):
@@ -208,6 +216,7 @@ export const cargoBoxes = pgTable(
     index("cargo_box_cargo_idx").on(t.cargoId),
     index("cargo_box_pallet_idx").on(t.palletId),
     unique("cargo_box_qr_uq").on(t.qrCode),
+    unique("cargo_box_uid_uq").on(t.boxUid),
     unique("cargo_box_no_uq").on(t.cargoId, t.boxNo),
   ],
 );
