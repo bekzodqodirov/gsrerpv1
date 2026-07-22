@@ -595,6 +595,36 @@ export async function returnCargo(cargoId: string, reason: string) {
   return { id: cargoId };
 }
 
+/**
+ * Qaytarilgan yukni SAQLANGAN joyidan (returned) butunlay o'chirish.
+ * O'chirish = voided (yumshoq o'chirish): barcha ro'yxatlardan yo'qoladi,
+ * lekin tarix (audit/event) saqlanadi. Faqat 'returned' holatidagi yuk uchun.
+ */
+export async function deleteReturnedCargo(cargoId: string) {
+  const session = await requirePermission("cargo.move");
+  const cargo = await db.query.cargos.findFirst({
+    where: eq(cargos.id, cargoId),
+  });
+  if (!cargo || cargo.voided) throw new Error("NOT_FOUND");
+  if (cargo.status !== "returned") throw new Error("NOT_RETURNED");
+  if (session.warehouseId && cargo.currentWarehouseId !== session.warehouseId) {
+    throw new Error("NOT_HERE");
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(cargos)
+      .set({ voided: true, updatedAt: new Date() })
+      .where(eq(cargos.id, cargoId));
+    await tx.insert(cargoEvents).values({
+      cargoId,
+      type: "note",
+      comment: "returned cargo permanently removed",
+      userId: session.sub,
+    });
+  });
+  return { id: cargoId };
+}
+
 /** Forma uchun: faol mijozlar va qabul qiluvchi skladlar. */
 export async function getReceiveFormData() {
   await requirePermission("cargo.receive");

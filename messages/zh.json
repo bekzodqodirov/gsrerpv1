@@ -99,7 +99,10 @@
     "returnReason": "原因（可选）",
     "returnConfirm": "确认退回",
     "notReturnable": "此货物无法退回（不在仓库中）",
-    "notHere": "此货物不在您的仓库"
+    "notHere": "此货物不在您的仓库",
+    "deletePermanently": "永久删除",
+    "deleteHint": "退回的货物将被永久删除（从所有列表中消失）。此操作无法撤销。",
+    "deleteConfirm": "确认删除"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",
@@ -548,6 +551,8 @@
     "reset": "重置",
     "noMatch": "无匹配",
     "all": "全部",
-    "empty": "空"
+    "empty": "空",
+    "resize": "调整宽度",
+    "resetWidths": "重置宽度"
   }
 }

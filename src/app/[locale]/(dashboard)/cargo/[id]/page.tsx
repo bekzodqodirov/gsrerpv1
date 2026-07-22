@@ -18,6 +18,7 @@ import { icons } from "@/components/icons";
 import { PhotoThumbs } from "@/components/photo-lightbox";
 import { RESTING_STATUSES } from "@/modules/stock/dto";
 import { ReturnCargo } from "./return-cargo";
+import { DeleteReturned } from "./delete-returned";
 
 export default async function CargoDetailPage({
   params,
@@ -38,9 +39,12 @@ export default async function CargoDetailPage({
     (session?.perms.includes("*") || session?.perms.includes("cargo.receive")) &&
     cargo.status === "received_cn";
   // Qaytarish: omborda jismonan turgan yukni cargo.move huquqi bilan.
+  const canMove =
+    session?.perms.includes("*") || session?.perms.includes("cargo.move");
   const canReturn =
-    (session?.perms.includes("*") || session?.perms.includes("cargo.move")) &&
-    (RESTING_STATUSES as readonly string[]).includes(cargo.status);
+    canMove && (RESTING_STATUSES as readonly string[]).includes(cargo.status);
+  // Qaytarilgan yukni butunlay o'chirish (saqlangan joydan).
+  const canDeleteReturned = canMove && cargo.status === "returned";
 
   const [cargoFiles, ...lineFiles] = await Promise.all([
     listAttachments("cargo", cargo.id),
@@ -69,6 +73,7 @@ export default async function CargoDetailPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canReturn && <ReturnCargo cargoId={cargo.id} />}
+          {canDeleteReturned && <DeleteReturned cargoId={cargo.id} />}
           {canEdit && (
             <Link
               href={`/cargo/${cargo.id}/edit`}

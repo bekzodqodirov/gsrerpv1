@@ -99,7 +99,10 @@
     "returnReason": "Sabab (ixtiyoriy)",
     "returnConfirm": "Ha, qaytarish",
     "notReturnable": "Bu yukni qaytarib bo'lmaydi (omborda emas)",
-    "notHere": "Bu yuk sizning omboringizda emas"
+    "notHere": "Bu yuk sizning omboringizda emas",
+    "deletePermanently": "Butunlay o'chirish",
+    "deleteHint": "Qaytarilgan yuk butunlay o'chiriladi (ro'yxatlardan yo'qoladi). Bu amalni ortga qaytarib bo'lmaydi.",
+    "deleteConfirm": "Ha, o'chirish"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",
@@ -548,6 +551,8 @@
     "reset": "Tozalash",
     "noMatch": "Mos yozuv yo'q",
     "all": "Hammasi",
-    "empty": "Bo'sh"
+    "empty": "Bo'sh",
+    "resize": "Kenglikni o'zgartirish",
+    "resetWidths": "Kengliklarni tiklash"
   }
 }

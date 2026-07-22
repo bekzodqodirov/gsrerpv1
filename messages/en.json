@@ -99,7 +99,10 @@
     "returnReason": "Reason (optional)",
     "returnConfirm": "Yes, return",
     "notReturnable": "This cargo cannot be returned (not in a warehouse)",
-    "notHere": "This cargo is not at your warehouse"
+    "notHere": "This cargo is not at your warehouse",
+    "deletePermanently": "Delete permanently",
+    "deleteHint": "The returned cargo will be permanently removed (gone from all lists). This cannot be undone.",
+    "deleteConfirm": "Yes, delete"
   },
   "cargoStatus": {
     "received_cn": "Received in China",
@@ -548,6 +551,8 @@
     "reset": "Reset",
     "noMatch": "No matches",
     "all": "All",
-    "empty": "Empty"
+    "empty": "Empty",
+    "resize": "Resize",
+    "resetWidths": "Reset widths"
   }
 }

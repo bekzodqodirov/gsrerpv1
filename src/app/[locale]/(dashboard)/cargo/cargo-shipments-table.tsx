@@ -102,11 +102,11 @@ function LineDetails({ row }: { row: Row }) {
                     {l.photoId ? (
                       <PhotoThumbs
                         photos={[{ id: l.photoId, name: l.productName }]}
-                        thumbClass="h-10 w-10"
+                        thumbClass="h-16 w-16"
                       />
                     ) : (
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                        {icons.camera("h-4 w-4")}
+                      <span className="flex h-16 w-16 items-center justify-center rounded-lg bg-surface-2 text-muted">
+                        {icons.camera("h-5 w-5")}
                       </span>
                     )}
                   </td>
@@ -172,6 +172,8 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
     noMatch: tt("noMatch"),
     all: tt("all"),
     empty: t("empty"),
+    resize: tt("resize"),
+    resetWidths: tt("resetWidths"),
   };
 
   const columns: Column<Row>[] = [
@@ -182,11 +184,11 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
         c.photoId ? (
           <PhotoThumbs
             photos={[{ id: c.photoId, name: c.regNumber }]}
-            thumbClass="h-9 w-9"
+            thumbClass="h-14 w-14"
           />
         ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-2 text-muted">
-            {icons.camera("h-4 w-4")}
+          <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-surface-2 text-muted">
+            {icons.camera("h-5 w-5")}
           </span>
         ),
     },

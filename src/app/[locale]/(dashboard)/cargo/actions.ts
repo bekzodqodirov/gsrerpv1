@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { receiveCargo, updateCargo, returnCargo } from "@/modules/cargo/service";
+import {
+  receiveCargo,
+  updateCargo,
+  returnCargo,
+  deleteReturnedCargo,
+} from "@/modules/cargo/service";
 import { receiveCargoSchema } from "@/modules/cargo/dto";
 import { saveAttachment } from "@/modules/shared/attachments";
 import { getSession } from "@/modules/shared/auth";
@@ -99,6 +104,26 @@ export async function returnCargoAction(
     if (msg === "NOT_HERE") return { error: "notHere" };
     if (msg === "NOT_RETURNABLE") return { error: "notReturnable" };
     console.error("[cargo] returnCargo:", e);
+    return { error: "server" };
+  }
+}
+
+/** Qaytarilgan yukni butunlay o'chirish (voided). */
+export async function deleteReturnedCargoAction(
+  cargoId: string,
+  _prev: ReturnState,
+  _formData: FormData,
+): Promise<ReturnState> {
+  try {
+    await deleteReturnedCargo(cargoId);
+    revalidatePath("/[locale]/cargo", "page");
+    revalidatePath("/[locale]/cargo/[id]", "page");
+    return { done: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "NOT_RETURNED") return { error: "notReturned" };
+    if (msg === "NOT_HERE") return { error: "notHere" };
+    console.error("[cargo] deleteReturnedCargo:", e);
     return { error: "server" };
   }
 }

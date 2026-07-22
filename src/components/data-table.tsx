@@ -7,10 +7,13 @@
 //  • ixtiyoriy kengaytiriladigan qator (master-detail)
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
+  type MouseEvent as ReactMouseEvent,
+  type CSSProperties,
 } from "react";
 import { useRouter } from "@/i18n/routing";
 import { icons } from "@/components/icons";
@@ -38,6 +41,9 @@ export type DataTableLabels = {
   noMatch: string;
   all: string;
   empty: string;
+  /** Ustun kengligini o'zgartirish (ixtiyoriy — tooltip/tugma matni). */
+  resize?: string;
+  resetWidths?: string;
 };
 
 const alignCls = (a?: string) =>
@@ -96,6 +102,60 @@ export function DataTable<T>({
   }, [hidden, ready, storageKey]);
 
   const visibleCols = columns.filter((c) => !hidden.has(c.id));
+
+  // ── Ustun kengliklari (drag bilan o'zgartiriladi, localStorage'da saqlanadi) ──
+  const widthKey = `dt:${tableId}:widths`;
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const [wReady, setWReady] = useState(false);
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(widthKey);
+      if (raw) setColWidths(JSON.parse(raw) as Record<string, number>);
+    } catch {
+      /* ignore */
+    }
+    setWReady(true);
+  }, [widthKey]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (wReady)
+      try {
+        localStorage.setItem(widthKey, JSON.stringify(colWidths));
+      } catch {
+        /* ignore */
+      }
+  }, [colWidths, wReady, widthKey]);
+
+  // Drag: sarlavha o'ng chekkasidan tortib ustun kengligini o'zgartirish.
+  // Move/end ishlovchilarini shu yerda mahalliy yaratamiz — o'zini o'zi
+  // to'g'ri olib tashlashi va eskirmasligi uchun.
+  const startResize = useCallback((e: ReactMouseEvent, colId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).parentElement;
+    const startX = e.clientX;
+    const startW = th?.offsetWidth ?? 120;
+    const move = (ev: MouseEvent) => {
+      const w = Math.max(60, startW + (ev.clientX - startX));
+      setColWidths((prev) => ({ ...prev, [colId]: w }));
+    };
+    const end = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", end);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", end);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+  }, []);
+  const colStyle = (id: string): CSSProperties | undefined => {
+    const w = colWidths[id];
+    return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
+  };
+  const resetWidths = () => setColWidths({});
 
   // ── Qidiruv + filtrlar ──
   const [query, setQuery] = useState("");
@@ -220,6 +280,15 @@ export function DataTable<T>({
                     </label>
                   );
                 })}
+                {Object.keys(colWidths).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={resetWidths}
+                    className="mt-1 w-full touch-manipulation rounded-md border-t border-line px-2 py-1.5 text-left text-xs text-muted hover:bg-surface-2"
+                  >
+                    ↔ {L.resetWidths ?? L.reset}
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -286,11 +355,19 @@ export function DataTable<T>({
               {visibleCols.map((c) => (
                 <th
                   key={c.id}
+                  style={colStyle(c.id)}
                   className={
-                    "px-3 py-2.5 font-semibold whitespace-nowrap " + alignCls(c.align)
+                    "relative px-3 py-2.5 font-semibold whitespace-nowrap " +
+                    alignCls(c.align)
                   }
                 >
-                  {c.header}
+                  <span className="block truncate">{c.header}</span>
+                  {/* Kenglikni o'zgartirish uchun o'ng chekkadan torting */}
+                  <span
+                    onMouseDown={(e) => startResize(e, c.id)}
+                    className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-primary/40"
+                    title={L.resize ?? ""}
+                  />
                 </th>
               ))}
             </tr>
@@ -353,7 +430,14 @@ export function DataTable<T>({
                       {visibleCols.map((c) => (
                         <td
                           key={c.id}
-                          className={"px-3 py-2 " + alignCls(c.align) + " " + (c.className ?? "")}
+                          style={colStyle(c.id)}
+                          className={
+                            "px-3 py-2 " +
+                            (colWidths[c.id] ? "overflow-hidden " : "") +
+                            alignCls(c.align) +
+                            " " +
+                            (c.className ?? "")
+                          }
                         >
                           {c.cell(row)}
                         </td>

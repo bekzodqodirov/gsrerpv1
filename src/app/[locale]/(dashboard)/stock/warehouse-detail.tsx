@@ -456,13 +456,13 @@ export function WarehouseDetail({
         <TableWrap>
           <thead>
             <tr>
-              <Th>{L.zone}</Th>
+              <Th className="hidden sm:table-cell">{L.zone}</Th>
               <Th>{L.qr}</Th>
-              <Th>{L.client}</Th>
-              <Th>{L.letter}</Th>
+              <Th className="hidden sm:table-cell">{L.client}</Th>
               <Th>{L.product}</Th>
-              <Th className="text-right">{L.age}</Th>
-              <Th>{L.flag}</Th>
+              <Th>{L.letter}</Th>
+              <Th className="hidden text-right sm:table-cell">{L.age}</Th>
+              <Th className="hidden sm:table-cell">{L.flag}</Th>
             </tr>
           </thead>
           <tbody>
@@ -471,7 +471,7 @@ export function WarehouseDetail({
             ) : (
               shownBoxes.map((b) => (
                 <TRow key={b.qrCode}>
-                  <Td>
+                  <Td className="hidden sm:table-cell">
                     {b.zone ? (
                       <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
                         {b.zone}
@@ -488,17 +488,20 @@ export function WarehouseDetail({
                       {b.qrCode}
                     </Link>
                   </Td>
-                  <Td className="font-mono text-xs font-bold">{b.clientCode}</Td>
-                  <Td className="font-mono text-sm font-black">
+                  <Td className="hidden font-mono text-xs font-bold sm:table-cell">
+                    {b.clientCode}
+                  </Td>
+                  {/* Tovar nomi, keyin unga berilgan harf-kod (nomdan KEYIN). */}
+                  <Td>{b.productName}</Td>
+                  <Td className="font-mono text-sm font-black text-primary">
                     {b.clientCode}-{b.letterCode}
                   </Td>
-                  <Td>{b.productName}</Td>
-                  <Td className="text-right">
+                  <Td className="hidden text-right sm:table-cell">
                     <Badge className={bucketBadge[ageBucket(b.days)]}>
                       {`${b.days} ${L.dayUnit}`}
                     </Badge>
                   </Td>
-                  <Td>
+                  <Td className="hidden sm:table-cell">
                     {b.flag ? (
                       <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
                         {b.flag}
