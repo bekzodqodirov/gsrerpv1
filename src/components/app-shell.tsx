@@ -110,6 +110,7 @@ export function AppShell({
       {/* Mobil topbar */}
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 lg:hidden print:hidden">
         <button
+          type="button"
           onClick={() => setOpen(true)}
           className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2"
           aria-label="Menu"
