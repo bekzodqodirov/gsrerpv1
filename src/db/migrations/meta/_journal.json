@@ -43,6 +43,13 @@
       "when": 1784704852372,
       "tag": "0005_warehouse_short_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784705642221,
+      "tag": "0006_watery_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

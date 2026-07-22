@@ -5,7 +5,7 @@
 // Sklad xodimi (session.warehouseId) faqat o'z omborini ko'radi.
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { cargos, clients, warehouses } from "@/db/schema";
+import { cargos, cargoBoxes, cargoLines, clients, warehouses } from "@/db/schema";
 import { requirePermission } from "@/modules/shared/auth";
 import {
   RESTING_STATUSES,
@@ -30,6 +30,8 @@ export type WarehouseStock = {
   totalVolumeM3: number;
   oldestDays: number;
   buckets: Buckets;
+  capacityM3: number | null;
+  capacityKg: number | null;
 };
 
 export type StockTotals = {
@@ -140,6 +142,8 @@ export async function getStockOverview(): Promise<{
       totalVolumeM3: round4(a?.m3 ?? 0),
       oldestDays: a?.oldestDays ?? 0,
       buckets: a?.buckets ?? emptyBuckets(),
+      capacityM3: w.capacityM3 != null ? Number(w.capacityM3) : null,
+      capacityKg: w.capacityKg != null ? Number(w.capacityKg) : null,
     };
   });
 
@@ -287,6 +291,112 @@ export async function getWarehouseStock(warehouseId: string): Promise<{
       totalVolumeM3: round4(totalM3),
     },
   };
+}
+
+export type WarehouseBox = {
+  qrCode: string;
+  boxNo: number;
+  cargoId: string;
+  regNumber: string;
+  clientCode: string;
+  clientName: string;
+  letterCode: string;
+  productName: string;
+  days: number;
+  flag: string | null;
+};
+
+/**
+ * Omborda jismonan yotgan BARCHA karobkalar (har biri alohida QR bilan).
+ * Karobka joyi = uning yukining joriy ombori (yuk "yotgan" holatda bo'lsa).
+ * Bu ham karobka darajasidagi ko'rinish, ham inventarizatsiya (scan) uchun
+ * kutilgan ro'yxat.
+ */
+export async function getWarehouseBoxes(
+  warehouseId: string,
+): Promise<{ warehouse: typeof warehouses.$inferSelect; boxes: WarehouseBox[] } | null> {
+  const session = await requirePermission("cargo.view");
+  if (session.warehouseId && session.warehouseId !== warehouseId) return null;
+
+  const wh = await db.query.warehouses.findFirst({
+    where: eq(warehouses.id, warehouseId),
+  });
+  if (!wh) return null;
+
+  const now = Date.now();
+  const rows = await db
+    .select({
+      qrCode: cargoBoxes.qrCode,
+      boxNo: cargoBoxes.boxNo,
+      flag: cargoBoxes.flag,
+      cargoId: cargos.id,
+      regNumber: cargos.regNumber,
+      receivedAt: cargos.receivedAt,
+      clientCode: clients.code,
+      clientName: clients.name,
+      letterCode: cargoLines.letterCode,
+      productName: cargoLines.productName,
+    })
+    .from(cargoBoxes)
+    .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
+    .where(
+      and(
+        eq(cargos.voided, false),
+        inArray(cargos.status, [...RESTING_STATUSES]),
+        eq(cargos.currentWarehouseId, warehouseId),
+      ),
+    )
+    .orderBy(asc(clients.code), asc(cargoLines.letterCode), asc(cargoBoxes.boxNo));
+
+  const boxes: WarehouseBox[] = rows.map((r) => ({
+    qrCode: r.qrCode,
+    boxNo: r.boxNo,
+    cargoId: r.cargoId,
+    regNumber: r.regNumber,
+    clientCode: r.clientCode,
+    clientName: r.clientName,
+    letterCode: r.letterCode,
+    productName: r.productName,
+    days: daysSince(r.receivedAt, now),
+    flag: r.flag,
+  }));
+
+  return { warehouse: wh, boxes };
+}
+
+/** Sozlamalar uchun: barcha omborlar (sig'im tahriri). */
+export async function listWarehousesForSettings() {
+  await requirePermission("settings.warehouses.manage");
+  return db.query.warehouses.findMany({
+    orderBy: [asc(warehouses.country), asc(warehouses.gsCode)],
+    columns: {
+      id: true,
+      gsCode: true,
+      name: true,
+      country: true,
+      kind: true,
+      capacityM3: true,
+      capacityKg: true,
+      isActive: true,
+    },
+  });
+}
+
+/** Ombor sig'imini yangilash (null = belgilanmagan). */
+export async function updateWarehouseCapacity(
+  warehouseId: string,
+  capacityM3: number | null,
+  capacityKg: number | null,
+) {
+  await requirePermission("settings.warehouses.manage");
+  const clean = (n: number | null) =>
+    n != null && Number.isFinite(n) && n > 0 ? String(n) : null;
+  await db
+    .update(warehouses)
+    .set({ capacityM3: clean(capacityM3), capacityKg: clean(capacityKg) })
+    .where(eq(warehouses.id, warehouseId));
 }
 
 function round3(n: number): number {

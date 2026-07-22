@@ -48,3 +48,34 @@ export type Buckets = Record<AgeBucket, number>;
 export function emptyBuckets(): Buckets {
   return { fresh: 0, warn: 0, old: 0, critical: 0 };
 }
+
+// ─── Sig'im / bandlik ────────────────────────────────────────────────────────
+
+export type Utilization = {
+  m3Pct: number | null;
+  kgPct: number | null;
+  /** Bog'lovchi (to'laroq) o'lcham foizi — mashina qarorini shu belgilaydi. */
+  pct: number | null;
+};
+
+/** Bandlik foizlari (sig'im belgilanmagan bo'lsa null). */
+export function utilization(
+  m3: number,
+  kg: number,
+  capM3: number | null,
+  capKg: number | null,
+): Utilization {
+  const m3Pct = capM3 && capM3 > 0 ? (m3 / capM3) * 100 : null;
+  const kgPct = capKg && capKg > 0 ? (kg / capKg) * 100 : null;
+  const both = [m3Pct, kgPct].filter((x): x is number => x != null);
+  return { m3Pct, kgPct, pct: both.length ? Math.max(...both) : null };
+}
+
+// Ostonlar: bandlik yoki yotish muddati shundan oshsa — "mashina yollash vaqti".
+export const UTIL_WARN_PCT = 80;
+export const AGE_ALERT_DAYS = 15;
+
+/** Mashina yollash tavsiya etiladimi (band yoki eski yuk ko'p). */
+export function truckNeeded(pct: number | null, oldestDays: number): boolean {
+  return (pct != null && pct >= UTIL_WARN_PCT) || oldestDays > AGE_ALERT_DAYS;
+}

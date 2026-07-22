@@ -152,8 +152,8 @@ export function AppShell({
       )}
 
       {/* Kontent */}
-      <div className="min-w-0 flex-1 lg:pl-60">
-        <main className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="min-w-0 flex-1 lg:pl-60 print:pl-0">
+        <main className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8 print:max-w-none print:p-0">
           {children}
         </main>
       </div>

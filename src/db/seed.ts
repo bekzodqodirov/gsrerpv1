@@ -33,6 +33,7 @@ const PERMISSIONS = [
   { code: "*", description: "Barcha huquqlar" },
   { code: "settings.users.manage", description: "Foydalanuvchilarni boshqarish" },
   { code: "settings.roles.manage", description: "Rollarni boshqarish" },
+  { code: "settings.warehouses.manage", description: "Ombor va sig'imni boshqarish" },
   { code: "clients.view", description: "Mijozlarni ko'rish" },
   { code: "clients.manage", description: "Mijozlarni boshqarish" },
   { code: "cargo.view", description: "Yuklarni ko'rish" },
@@ -49,12 +50,12 @@ const PERMISSIONS = [
 // gsCode — QR/karobka yorlig'ida (stikerda) ishlatiladigan qisqa kod:
 // Yiwu=YW, Guangzhou=GZ, Urumchi=URM, Qashqar=KSH (UZ: Toshkent=TSH, Andijon=ADN).
 const WAREHOUSES = [
-  { code: "YIWU", gsCode: "YW", name: "Yiwu skladi", country: "CN", city: "Yiwu", kind: "receiving" },
-  { code: "GZ", gsCode: "GZ", name: "Guangzhou skladi", country: "CN", city: "Guangzhou", kind: "receiving" },
-  { code: "URC", gsCode: "URM", name: "Urumchi skladi", country: "CN", city: "Urumqi", kind: "receiving" },
-  { code: "KSG", gsCode: "KSH", name: "Qashqar skladi", country: "CN", city: "Kashgar", kind: "consolidation" },
-  { code: "TAS", gsCode: "TSH", name: "Toshkent customs warehouse", country: "UZ", city: "Toshkent", kind: "customs" },
-  { code: "AND", gsCode: "ADN", name: "Andijon customs warehouse", country: "UZ", city: "Andijon", kind: "customs" },
+  { code: "YIWU", gsCode: "YW", name: "Yiwu skladi", country: "CN", city: "Yiwu", kind: "receiving", capacityM3: "500", capacityKg: "120000" },
+  { code: "GZ", gsCode: "GZ", name: "Guangzhou skladi", country: "CN", city: "Guangzhou", kind: "receiving", capacityM3: "400", capacityKg: "100000" },
+  { code: "URC", gsCode: "URM", name: "Urumchi skladi", country: "CN", city: "Urumqi", kind: "receiving", capacityM3: "300", capacityKg: "80000" },
+  { code: "KSG", gsCode: "KSH", name: "Qashqar skladi", country: "CN", city: "Kashgar", kind: "consolidation", capacityM3: "1500", capacityKg: "400000" },
+  { code: "TAS", gsCode: "TSH", name: "Toshkent customs warehouse", country: "UZ", city: "Toshkent", kind: "customs", capacityM3: "400", capacityKg: "90000" },
+  { code: "AND", gsCode: "ADN", name: "Andijon customs warehouse", country: "UZ", city: "Andijon", kind: "customs", capacityM3: "300", capacityKg: "70000" },
 ] as const;
 
 const CURRENCIES = [
