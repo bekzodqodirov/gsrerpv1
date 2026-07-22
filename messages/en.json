@@ -87,7 +87,8 @@
     "clientRequired": "Please select a client",
     "sameCodeNote": "All boxes of this product share this same code",
     "compressing": "Compressing…",
-    "boxLabels": "Box QR"
+    "boxLabels": "Box QR",
+    "labelSize": "Label size"
   },
   "cargoStatus": {
     "received_cn": "Received in China",

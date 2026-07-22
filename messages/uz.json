@@ -87,7 +87,8 @@
     "clientRequired": "Mijozni tanlang",
     "sameCodeNote": "Shu tovarning barcha karobkalari shu kodga ega",
     "compressing": "Rasmlar siqilmoqda…",
-    "boxLabels": "Karobka QR"
+    "boxLabels": "Karobka QR",
+    "labelSize": "Etiket o'lchami"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",

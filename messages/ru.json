@@ -87,7 +87,8 @@
     "clientRequired": "Выберите клиента",
     "sameCodeNote": "Все коробки этого товара имеют этот же код",
     "compressing": "Сжатие фото…",
-    "boxLabels": "QR коробок"
+    "boxLabels": "QR коробок",
+    "labelSize": "Размер этикетки"
   },
   "cargoStatus": {
     "received_cn": "Принят в Китае",
