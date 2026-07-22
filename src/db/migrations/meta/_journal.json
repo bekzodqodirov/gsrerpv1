@@ -36,6 +36,13 @@
       "when": 1784704148363,
       "tag": "0004_lean_cerebro",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784704852372,
+      "tag": "0005_warehouse_short_codes",
+      "breakpoints": true
     }
   ]
 }
