@@ -344,6 +344,22 @@
   "home": {
     "title": "GSR ERP System",
     "welcome": "Welcome, {name}!",
-    "subtitle": "Enterprise management: inventory, sales, finance and HR — all in one place"
+    "subtitle": "Enterprise management: inventory, sales, finance and HR — all in one place",
+    "stockVol": "In stock (m³)",
+    "stockWeight": "In stock (kg)",
+    "inTransit": "In transit (m³)",
+    "intakeWeek": "Intake this week",
+    "revenueMonth": "Revenue (month)",
+    "expenseMonth": "Expenses (month)",
+    "marginMonth": "Margin (month)",
+    "debtors": "Debtors",
+    "perWarehouse": "Stock by warehouse",
+    "all": "All",
+    "noStock": "No stock",
+    "recentBatches": "Recent batches",
+    "noBatches": "No batches",
+    "boxes": "boxes",
+    "topClients": "Top clients (by volume)",
+    "quickLinks": "Quick links"
   }
 }

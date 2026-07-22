@@ -344,6 +344,22 @@
   "home": {
     "title": "GSR ERP 系统",
     "welcome": "欢迎，{name}！",
-    "subtitle": "企业管理：仓库、销售、财务与人事 — 一站式平台"
+    "subtitle": "企业管理：仓库、销售、财务与人事 — 一站式平台",
+    "stockVol": "库存 (m³)",
+    "stockWeight": "库存 (kg)",
+    "inTransit": "在途 (m³)",
+    "intakeWeek": "本周收货",
+    "revenueMonth": "收入（月）",
+    "expenseMonth": "支出（月）",
+    "marginMonth": "利润（月）",
+    "debtors": "欠款客户",
+    "perWarehouse": "各仓库库存",
+    "all": "全部",
+    "noStock": "无库存",
+    "recentBatches": "最近批次",
+    "noBatches": "无批次",
+    "boxes": "箱",
+    "topClients": "重点客户（按体积）",
+    "quickLinks": "快捷入口"
   }
 }

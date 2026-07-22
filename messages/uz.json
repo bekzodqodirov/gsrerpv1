@@ -344,6 +344,22 @@
   "home": {
     "title": "GSR ERP tizimi",
     "welcome": "Xush kelibsiz, {name}!",
-    "subtitle": "Korxona boshqaruvi: ombor, savdo, moliya va xodimlar — bir joyda"
+    "subtitle": "Korxona boshqaruvi: ombor, savdo, moliya va xodimlar — bir joyda",
+    "stockVol": "Qoldiq (m³)",
+    "stockWeight": "Qoldiq (kg)",
+    "inTransit": "Yo'lda (m³)",
+    "intakeWeek": "Shu hafta kirim",
+    "revenueMonth": "Daromad (oy)",
+    "expenseMonth": "Xarajat (oy)",
+    "marginMonth": "Foyda (oy)",
+    "debtors": "Qarzdorlar",
+    "perWarehouse": "Ombor bo'yicha qoldiq",
+    "all": "Barchasi",
+    "noStock": "Qoldiq yo'q",
+    "recentBatches": "So'nggi partiyalar",
+    "noBatches": "Partiya yo'q",
+    "boxes": "karobka",
+    "topClients": "Eng ko'p qoldiqli mijozlar",
+    "quickLinks": "Tez havolalar"
   }
 }
