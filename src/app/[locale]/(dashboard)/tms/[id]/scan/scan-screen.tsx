@@ -14,9 +14,17 @@ import {
   scanLoadAction,
   scanUnloadAction,
   addLineAndScanAction,
+  manualMarkAction,
 } from "../../actions";
 
 type Mode = "load" | "unload";
+type ScanLine = {
+  lineId: string;
+  title: string;
+  planned: number;
+  loaded: number;
+  unloaded: number;
+};
 
 const OUTCOME_STYLE: Record<string, { cls: string; good: boolean }> = {
   loaded: { cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100", good: true },
@@ -64,6 +72,7 @@ export function ScanScreen({
   total,
   batchCode,
   routeLabel,
+  lines,
 }: {
   batchId: string;
   mode: Mode;
@@ -71,6 +80,7 @@ export function ScanScreen({
   total: number;
   batchCode: string;
   routeLabel: string;
+  lines: ScanLine[];
 }) {
   const t = useTranslations("tms");
   const action = mode === "load" ? scanLoadAction : scanUnloadAction;
@@ -92,6 +102,9 @@ export function ScanScreen({
   const [adding, setAdding] = useState(false);
   const [flash, setFlash] = useState<ScanResult | null>(null);
   const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
+  // Qo'lda belgilash paneli (stiker yo'q/tugagan holat).
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualBusy, setManualBusy] = useState<string | null>(null);
 
   // Ekran ochilishi bilan kamerani avtomatik yoqamiz (skladchi telefonda) —
   // faqat foydalanuvchi oldin o'zi o'chirmagan bo'lsa.
@@ -137,6 +150,18 @@ export function ScanScreen({
     } finally {
       setAdding(false);
       inputRef.current?.focus();
+    }
+  }
+
+  async function handleManual(lineId: string) {
+    if (manualBusy) return;
+    setManualBusy(lineId);
+    try {
+      const r = await manualMarkAction(batchId, lineId, mode);
+      beep(OUTCOME_STYLE[r.outcome]?.good ?? false);
+      setFlash(r);
+    } finally {
+      setManualBusy(null);
     }
   }
 
@@ -311,6 +336,51 @@ export function ScanScreen({
       )}
 
       <p className="text-center text-xs text-muted">{t("scanHint")}</p>
+
+      {/* Qo'lda belgilash — stiker tugagan/tushib qolgan holat uchun */}
+      {lines.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setManualOpen((v) => !v)}
+            className="w-full touch-manipulation rounded-lg border border-dashed border-line py-2 text-sm font-medium text-muted hover:bg-surface-2"
+          >
+            {manualOpen ? "▲ " : "▼ "}
+            {t("manualMark")}
+          </button>
+          {manualOpen && (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-center text-xs text-muted">{t("manualHint")}</p>
+              {lines.map((l) => {
+                const remaining =
+                  mode === "load"
+                    ? Math.max(0, l.planned - l.loaded)
+                    : Math.max(0, l.loaded - l.unloaded);
+                const disabled = manualBusy != null || remaining <= 0;
+                return (
+                  <button
+                    key={l.lineId}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => handleManual(l.lineId)}
+                    className="flex w-full touch-manipulation items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2.5 text-left text-sm hover:bg-surface-2 disabled:opacity-40"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{l.title}</span>
+                    <span className="font-mono text-xs tabular-nums text-muted">
+                      {mode === "load"
+                        ? `${l.loaded}/${l.planned}`
+                        : `${l.unloaded}/${l.loaded}`}
+                    </span>
+                    <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-bold text-white">
+                      {manualBusy === l.lineId ? "…" : "+1"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Katta natija flash'i — uzoqdan ko'rinadi (✓ yashil / ✗ qizil) */}
       {flash && (

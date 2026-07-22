@@ -17,6 +17,7 @@ import {
   scanLoad,
   scanUnload,
   addLineAndScanLoad,
+  manualMark,
 } from "@/modules/tms/service";
 import {
   batchCreateSchema,
@@ -245,6 +246,25 @@ export async function scanUnloadAction(
     return res;
   } catch (e) {
     return scanErrorResult(e, code);
+  }
+}
+
+/** Qo'lda belgilash — skaner ishlamaganda (stiker yo'q/tugadi): qatorni
+ * tanlab bitta karobkani yuklandi/tushirildi deb belgilaydi. */
+export async function manualMarkAction(
+  batchId: string,
+  lineId: string,
+  mode: "load" | "unload",
+): Promise<ScanResult> {
+  try {
+    const res = await manualMark(batchId, lineId, mode);
+    revalidateTms();
+    return res;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "FORBIDDEN_WAREHOUSE") return { outcome: "wrong_warehouse", code: "" };
+    console.error("[tms] manualMark:", e);
+    return { outcome: "unknown", code: "" };
   }
 }
 

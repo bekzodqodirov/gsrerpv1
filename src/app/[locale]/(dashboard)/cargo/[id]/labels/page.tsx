@@ -10,17 +10,22 @@ export default async function CargoLabelsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ line?: string }>;
+  searchParams: Promise<{ line?: string; box?: string }>;
 }) {
   const { id } = await params;
-  const { line } = await searchParams;
+  const { line, box } = await searchParams;
   const t = await getTranslations("cargo");
 
   const data = await getCargo(id);
   if (!data) notFound();
   const allBoxes = await getCargoBoxes(id);
-  // Bitta tovar (qator) tanlangan bo'lsa — faqat o'sha qator karobkalari.
-  const boxes = line ? allBoxes.filter((b) => b.lineId === line) : allBoxes;
+  // Bitta karobka QR kodi berilsa — FAQAT o'sha karobka (stiker tushib
+  // qolganda qayta chop etish); yoki bitta tovar (qator) tanlansa — o'sha qator.
+  const boxes = box
+    ? allBoxes.filter((b) => b.qrCode === box)
+    : line
+      ? allBoxes.filter((b) => b.lineId === line)
+      : allBoxes;
 
   // QR kodlarni server tomonda data-URL qilib tayyorlaymiz
   const labels = await Promise.all(

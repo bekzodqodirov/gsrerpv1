@@ -327,7 +327,9 @@
     "heavy": "Og'ir",
     "medium": "O'rta",
     "light": "Yengil",
-    "perBoxKg": "kg/karobka"
+    "perBoxKg": "kg/karobka",
+    "manualMark": "Qo'lda belgilash (stikersiz)",
+    "manualHint": "Stiker yo'q yoki tugagan bo'lsa — tovarni tanlab bittadan belgilang."
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

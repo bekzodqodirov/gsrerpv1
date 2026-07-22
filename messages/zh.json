@@ -327,7 +327,9 @@
     "heavy": "重",
     "medium": "中",
     "light": "轻",
-    "perBoxKg": "公斤/箱"
+    "perBoxKg": "公斤/箱",
+    "manualMark": "手动标记（无贴纸）",
+    "manualHint": "如果贴纸丢失或用完，选择商品逐个标记。"
   },
   "batchStatus": {
     "planned": "已计划",

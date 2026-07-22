@@ -327,7 +327,9 @@
     "heavy": "Heavy",
     "medium": "Medium",
     "light": "Light",
-    "perBoxKg": "kg/box"
+    "perBoxKg": "kg/box",
+    "manualMark": "Mark manually (no sticker)",
+    "manualHint": "If a sticker is missing or you ran out — pick the product and mark one at a time."
   },
   "batchStatus": {
     "planned": "Planned",

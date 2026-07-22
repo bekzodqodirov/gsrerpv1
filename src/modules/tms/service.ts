@@ -1341,6 +1341,110 @@ export async function addLineAndScanLoad(
   return scanLoad(batchId, code);
 }
 
+// ─── Qo'lda belgilash (stiker tugadi / tushib qoldi) ────────────────────────
+// Skaner ishlamaganda ishchi tovarni RO'YXATDAN tanlab bitta karobkani
+// "yuklandi/tushirildi" deb belgilaydi — tizim shu qatorning navbatdagi bo'sh
+// karobkasini scanLoad/scanUnload orqali qayd etadi (kvota/qoidalar saqlanadi).
+
+/** Skaner ekrani "qo'lda belgilash" paneli uchun: plandagi qatorlar + soni. */
+export async function getScanLines(batchId: string) {
+  const session = await requirePermission("tms.view");
+  const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
+  if (!b) return [];
+  if (
+    session.warehouseId &&
+    b.originWarehouseId !== session.warehouseId &&
+    b.destinationWarehouseId !== session.warehouseId
+  ) {
+    return [];
+  }
+  const planRows = await db
+    .select({
+      lineId: batchLines.lineId,
+      planned: batchLines.plannedBoxes,
+      letterCode: cargoLines.letterCode,
+      productName: cargoLines.productName,
+      clientCode: clients.code,
+    })
+    .from(batchLines)
+    .innerJoin(cargoLines, eq(batchLines.lineId, cargoLines.id))
+    .innerJoin(cargos, eq(batchLines.cargoId, cargos.id))
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .where(eq(batchLines.batchId, batchId))
+    .orderBy(asc(clients.code), asc(cargoLines.lineNo));
+
+  const bb = await db
+    .select({
+      lineId: cargoBoxes.lineId,
+      loaded: batchBoxes.loadedScan,
+      unloaded: batchBoxes.unloadedScan,
+    })
+    .from(batchBoxes)
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .where(eq(batchBoxes.batchId, batchId));
+  const counts = new Map<string, { loaded: number; unloaded: number }>();
+  for (const r of bb) {
+    const c = counts.get(r.lineId) ?? { loaded: 0, unloaded: 0 };
+    if (r.loaded) c.loaded += 1;
+    if (r.unloaded) c.unloaded += 1;
+    counts.set(r.lineId, c);
+  }
+  return planRows.map((r) => {
+    const c = counts.get(r.lineId) ?? { loaded: 0, unloaded: 0 };
+    return {
+      lineId: r.lineId,
+      title: `${r.clientCode}-${r.letterCode} · ${r.productName}`,
+      planned: r.planned,
+      loaded: c.loaded,
+      unloaded: c.unloaded,
+    };
+  });
+}
+
+/** Qo'lda bitta karobkani belgilash: qatorning navbatdagi bo'sh karobkasini
+ * topib, oddiy scan yo'li bilan qayd etadi (barcha kvota/qoidalar saqlanadi). */
+export async function manualMark(
+  batchId: string,
+  lineId: string,
+  mode: "load" | "unload",
+): Promise<ScanResult> {
+  await requireAny(["tms.load", "tms.manage"]);
+
+  if (mode === "load") {
+    const loaded = await db
+      .select({ boxId: batchBoxes.boxId })
+      .from(batchBoxes)
+      .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
+    const loadedSet = new Set(loaded.map((x) => x.boxId));
+    const candidates = await db
+      .select({ id: cargoBoxes.id, qrCode: cargoBoxes.qrCode })
+      .from(cargoBoxes)
+      .where(eq(cargoBoxes.lineId, lineId))
+      .orderBy(asc(cargoBoxes.boxNo));
+    const pick = candidates.find((c) => !loadedSet.has(c.id));
+    if (!pick) return { outcome: "quota_full", code: "" };
+    return scanLoad(batchId, pick.qrCode);
+  }
+
+  // unload: shu qatorning yuklangan, lekin hali tushirilmagan karobkasi
+  const pick = await db
+    .select({ qrCode: cargoBoxes.qrCode })
+    .from(batchBoxes)
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .where(
+      and(
+        eq(batchBoxes.batchId, batchId),
+        eq(cargoBoxes.lineId, lineId),
+        eq(batchBoxes.loadedScan, true),
+        eq(batchBoxes.unloadedScan, false),
+      ),
+    )
+    .orderBy(asc(cargoBoxes.boxNo))
+    .limit(1);
+  if (!pick[0]) return { outcome: "duplicate", code: "" };
+  return scanUnload(batchId, pick[0].qrCode);
+}
+
 export async function arriveBatch(batchId: string) {
   await requireAny(["tms.manage", "tms.load"]);
   const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });

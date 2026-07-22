@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { redirect } from "@/i18n/routing";
-import { getBatchScanInfo } from "@/modules/tms/service";
+import { getBatchScanInfo, getScanLines } from "@/modules/tms/service";
 import { AutoRefresh } from "../auto-refresh";
 import { ScanScreen } from "./scan-screen";
 
@@ -37,6 +37,8 @@ export default async function BatchScanPage({
 
   const mode = editable ? "load" : "unload";
   const prog = mode === "load" ? loadProgress : unloadProgress;
+  // Qo'lda belgilash paneli uchun plandagi qatorlar (stiker yo'q holati).
+  const scanLines = await getScanLines(id);
 
   return (
     <>
@@ -49,6 +51,7 @@ export default async function BatchScanPage({
         total={prog.total}
         batchCode={batch.code}
         routeLabel={`${origin?.gsCode ?? ""} → ${dest?.gsCode ?? ""}`}
+        lines={scanLines}
       />
     </>
   );
