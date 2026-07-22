@@ -46,12 +46,12 @@ const SIZES: Size[] = [
 function metrics(s: Size) {
   const ch = s.ch;
   const cw = s.cw;
-  const hA = ch * 0.16; // sklad + tartib
-  const hB = ch * 0.32; // CLIENT-HARF (asosiy)
-  const hD = ch * 0.18; // unikal karobka ID
-  const hC = ch - hA - hB - hD; // QR + tovar nomi (qolgan joy)
+  const hA = ch * 0.14; // sklad + qabul sanasi + tartib
+  const hB = ch * 0.3; // CLIENT-HARF (asosiy)
+  const hD = ch * 0.16; // unikal karobka ID
+  const hC = ch - hA - hB - hD; // QR + tovar nomi (qolgan joy — QR shu yerda kattalashadi)
   const padX = cw * 0.06;
-  const qr = Math.min(hC * 0.85, cw * 0.42);
+  const qr = Math.min(hC * 0.92, cw * 0.5);
   return { ch, cw, hA, hB, hC, hD, padX, qr };
 }
 
@@ -72,10 +72,11 @@ function buildCss(s: Size): string {
 /* Har zona — FLEX EMAS, aniq mm balandlik (flex:0 0 auto) + o'z overflow'i:
    shu bilan hech qaysi zona qo'shnisiga bosib kirmaydi. */
 
-/* 1-zona: sklad (chapda) + karobka tartibi (o'ngda) — kichik */
-.lbl-head { height:${m.hA}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; justify-content:space-between; align-items:center; gap:${m.padX}mm; padding:0 ${m.padX}mm; }
-.lbl-og { font-weight:900; font-size:${m.hA * 0.55}mm; line-height:1; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; }
-.lbl-cnt { font-weight:800; font-size:${m.hA * 0.4}mm; border:${hair}; border-radius:1mm; padding:0 ${m.hA * 0.22}mm; white-space:nowrap; flex:none; }
+/* 1-zona: sklad (chapda) + qabul sanasi (o'rtada) + karobka tartibi (o'ngda) */
+.lbl-head { height:${m.hA}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; justify-content:space-between; align-items:center; gap:${m.padX * 0.7}mm; padding:0 ${m.padX}mm; }
+.lbl-og { font-weight:900; font-size:${m.hA * 0.62}mm; line-height:1; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; flex:none; }
+.lbl-date { flex:1; min-width:0; text-align:center; font-family:monospace; font-weight:600; font-size:${m.hA * 0.42}mm; color:#555; white-space:nowrap; overflow:hidden; }
+.lbl-cnt { font-weight:800; font-size:${m.hA * 0.46}mm; border:${hair}; border-radius:1mm; padding:0 ${m.hA * 0.22}mm; white-space:nowrap; flex:none; }
 
 /* 2-zona (ENG MUHIM): CLIENT-HARF — butun kenglikda, bitta qatorda, katta */
 .lbl-code { height:${m.hB}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:0 ${m.padX}mm; }
@@ -183,6 +184,7 @@ export function LabelSheet({
               <div className="lbl-card">
                 <div className="lbl-head">
                   <span className="lbl-og">{header.originGs}</span>
+                  <span className="lbl-date">{header.receivedDate}</span>
                   <span className="lbl-cnt">
                     {b.position}/{b.boxCount}
                   </span>
