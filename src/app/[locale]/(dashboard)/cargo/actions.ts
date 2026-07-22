@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { receiveCargo, updateCargo } from "@/modules/cargo/service";
+import { receiveCargo, updateCargo, returnCargo } from "@/modules/cargo/service";
 import { receiveCargoSchema } from "@/modules/cargo/dto";
 import { saveAttachment } from "@/modules/shared/attachments";
 import { getSession } from "@/modules/shared/auth";
@@ -75,6 +75,30 @@ export async function receiveCargoAction(
     const msg = e instanceof Error ? e.message : "";
     if (msg === "CARGO_LOCKED") return { error: "cargoLocked" };
     console.error("[cargo] server error:", e);
+    return { error: "server" };
+  }
+}
+
+export type ReturnState = { error?: string; done?: boolean };
+
+/** Yukni "qaytarildi" deb belgilash (ombordan chiqaradi). */
+export async function returnCargoAction(
+  cargoId: string,
+  _prev: ReturnState,
+  formData: FormData,
+): Promise<ReturnState> {
+  const reason = String(formData.get("reason") ?? "");
+  try {
+    await returnCargo(cargoId, reason);
+    revalidatePath("/[locale]/cargo", "page");
+    revalidatePath("/[locale]/cargo/[id]", "page");
+    revalidatePath("/[locale]/stock", "page");
+    return { done: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "NOT_HERE") return { error: "notHere" };
+    if (msg === "NOT_RETURNABLE") return { error: "notReturnable" };
+    console.error("[cargo] returnCargo:", e);
     return { error: "server" };
   }
 }

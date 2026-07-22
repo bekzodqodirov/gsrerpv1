@@ -92,7 +92,14 @@
     "boxLabels": "Karobka QR",
     "labelSize": "Etiket o'lchami",
     "lineCode": "Kod",
-    "inBatch": "Partiya"
+    "inBatch": "Partiya",
+    "returnCargo": "Qaytarish",
+    "returnTitle": "Yukni qaytarish",
+    "returnHint": "Yuk ombordan chiqadi va qoldiqda ko'rinmaydi. Bu amalni ortga qaytarib bo'lmaydi.",
+    "returnReason": "Sabab (ixtiyoriy)",
+    "returnConfirm": "Ha, qaytarish",
+    "notReturnable": "Bu yukni qaytarib bo'lmaydi (omborda emas)",
+    "notHere": "Bu yuk sizning omboringizda emas"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",
@@ -106,7 +113,8 @@
     "ready": "Tarqatishga tayyor",
     "delivered": "Topshirildi",
     "held": "Ushlab turilgan",
-    "lost": "Yo'qolgan"
+    "lost": "Yo'qolgan",
+    "returned": "Qaytarildi"
   },
   "stock": {
     "title": "Ombor qoldig'i",

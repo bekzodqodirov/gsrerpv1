@@ -92,7 +92,14 @@
     "boxLabels": "Box QR",
     "labelSize": "Label size",
     "lineCode": "Code",
-    "inBatch": "Batch"
+    "inBatch": "Batch",
+    "returnCargo": "Return",
+    "returnTitle": "Return cargo",
+    "returnHint": "The cargo leaves the warehouse and no longer counts in stock. This cannot be undone.",
+    "returnReason": "Reason (optional)",
+    "returnConfirm": "Yes, return",
+    "notReturnable": "This cargo cannot be returned (not in a warehouse)",
+    "notHere": "This cargo is not at your warehouse"
   },
   "cargoStatus": {
     "received_cn": "Received in China",
@@ -106,7 +113,8 @@
     "ready": "Ready for delivery",
     "delivered": "Delivered",
     "held": "On hold",
-    "lost": "Lost"
+    "lost": "Lost",
+    "returned": "Returned"
   },
   "stock": {
     "title": "Warehouse stock",

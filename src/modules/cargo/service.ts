@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { requirePermission } from "@/modules/shared/auth";
 import { nextNumber } from "@/modules/shared/numbering";
+import { RESTING_STATUSES } from "@/modules/stock/dto";
 import { letterCodeForIndex, buildBoxQr } from "./box-code";
 import {
   receiveCargoSchema,
@@ -554,6 +555,43 @@ export async function getCargoBoxes(cargoId: string) {
     seenInLine.set(b.lineId, position);
     return { ...b, position };
   });
+}
+
+/**
+ * Yukni QAYTARISH: omborga kelib bo'lgan (jismonan turgan) yukni "qaytarildi"
+ * deb belgilaydi. Status RESTING_STATUSES ga kirmagani uchun yuk qoldiqdan
+ * o'z-o'zidan chiqadi. Sabab cargo_event'ga yoziladi (tarix uchun).
+ */
+export async function returnCargo(cargoId: string, reason: string) {
+  const session = await requirePermission("cargo.move");
+  const cargo = await db.query.cargos.findFirst({
+    where: eq(cargos.id, cargoId),
+  });
+  if (!cargo || cargo.voided) throw new Error("NOT_FOUND");
+  // Sklad xodimi faqat o'z omboridagini qaytaradi.
+  if (session.warehouseId && cargo.currentWarehouseId !== session.warehouseId) {
+    throw new Error("NOT_HERE");
+  }
+  // Faqat omborda jismonan turgan yukni qaytarish mumkin.
+  if (!(RESTING_STATUSES as readonly string[]).includes(cargo.status)) {
+    throw new Error("NOT_RETURNABLE");
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(cargos)
+      .set({ status: "returned", updatedAt: new Date() })
+      .where(eq(cargos.id, cargoId));
+    await tx.insert(cargoEvents).values({
+      cargoId,
+      type: "status_change",
+      fromStatus: cargo.status,
+      toStatus: "returned",
+      comment: reason.trim() || null,
+      userId: session.sub,
+    });
+  });
+  return { id: cargoId };
 }
 
 /** Forma uchun: faol mijozlar va qabul qiluvchi skladlar. */

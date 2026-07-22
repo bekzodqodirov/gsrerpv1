@@ -49,6 +49,7 @@ export const cargoStatusEnum = pgEnum("cargo_status", [
   "delivered", //       10. Mijozga topshirildi
   "held", //             ⚠ Ushlab turilgan (qarz, bojxona muammosi...)
   "lost", //             ⚠ Yo'qolgan (to'liq)
+  "returned", //         ⚠ Qaytarildi (ombordan chiqarildi — qoldiqqa kirmaydi)
 ]);
 
 // ─── Prixod (yuk qabul hujjati) ──────────────────────────────────────────────

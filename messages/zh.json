@@ -92,7 +92,14 @@
     "boxLabels": "箱码",
     "labelSize": "标签尺寸",
     "lineCode": "编号",
-    "inBatch": "批次"
+    "inBatch": "批次",
+    "returnCargo": "退回",
+    "returnTitle": "退回货物",
+    "returnHint": "货物将离开仓库，不再计入库存。此操作无法撤销。",
+    "returnReason": "原因（可选）",
+    "returnConfirm": "确认退回",
+    "notReturnable": "此货物无法退回（不在仓库中）",
+    "notHere": "此货物不在您的仓库"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",
@@ -106,7 +113,8 @@
     "ready": "可发放",
     "delivered": "已交付",
     "held": "被扣留",
-    "lost": "丢失"
+    "lost": "丢失",
+    "returned": "已退回"
   },
   "stock": {
     "title": "仓库库存",

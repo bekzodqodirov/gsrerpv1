@@ -16,6 +16,8 @@ import {
 } from "@/components/ui";
 import { icons } from "@/components/icons";
 import { PhotoThumbs } from "@/components/photo-lightbox";
+import { RESTING_STATUSES } from "@/modules/stock/dto";
+import { ReturnCargo } from "./return-cargo";
 
 export default async function CargoDetailPage({
   params,
@@ -35,6 +37,10 @@ export default async function CargoDetailPage({
   const canEdit =
     (session?.perms.includes("*") || session?.perms.includes("cargo.receive")) &&
     cargo.status === "received_cn";
+  // Qaytarish: omborda jismonan turgan yukni cargo.move huquqi bilan.
+  const canReturn =
+    (session?.perms.includes("*") || session?.perms.includes("cargo.move")) &&
+    (RESTING_STATUSES as readonly string[]).includes(cargo.status);
 
   const [cargoFiles, ...lineFiles] = await Promise.all([
     listAttachments("cargo", cargo.id),
@@ -61,7 +67,8 @@ export default async function CargoDetailPage({
             {cargo.receivedAt.toISOString().slice(0, 10)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canReturn && <ReturnCargo cargoId={cargo.id} />}
           {canEdit && (
             <Link
               href={`/cargo/${cargo.id}/edit`}
