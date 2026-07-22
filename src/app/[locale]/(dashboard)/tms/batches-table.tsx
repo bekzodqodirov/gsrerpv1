@@ -1,6 +1,6 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { Badge } from "@/components/ui";
 import { icons } from "@/components/icons";
@@ -11,17 +11,19 @@ import {
   type DataTableLabels,
 } from "@/components/data-table";
 
+// Raqamlar SERVER tomonda formatlanadi (locale) va matn sifatida keladi —
+// client'da Intl ishlatilmaydi (SSR/hydration mos kelmasligini oldini oladi).
 type Row = {
   id: string;
   code: string;
   status: string;
   originGs: string;
   destGs: string;
-  totalVolumeM3: number;
-  totalWeightKg: number;
   cargoCount: number;
-  agreedPrice: string | null;
-  currency: string | null;
+  volumeText: string;
+  weightText: string;
+  cargosText: string;
+  priceText: string;
 };
 
 const scannable = (b: Row) =>
@@ -41,9 +43,6 @@ export function BatchesTable({
   const t = useTranslations("tms");
   const ts = useTranslations("batchStatus");
   const tt = useTranslations("table");
-  const locale = useLocale();
-  const num = (n: number, d = 0) =>
-    new Intl.NumberFormat(locale, { maximumFractionDigits: d }).format(n);
 
   const labels: DataTableLabels = {
     search: tt("search"),
@@ -100,21 +99,21 @@ export function BatchesTable({
       header: t("volume"),
       align: "right",
       className: "font-mono tabular-nums",
-      cell: (b) => `${num(b.totalVolumeM3, 2)} m³`,
+      cell: (b) => b.volumeText,
     },
     {
       id: "weight",
       header: t("weight"),
       align: "right",
       className: "font-mono tabular-nums",
-      cell: (b) => `${num(b.totalWeightKg)} kg`,
+      cell: (b) => b.weightText,
     },
     {
       id: "cargos",
       header: t("cargos"),
       align: "right",
       className: "font-mono tabular-nums",
-      cell: (b) => num(b.cargoCount),
+      cell: (b) => b.cargosText,
     },
     ...(canManage
       ? [
@@ -123,10 +122,7 @@ export function BatchesTable({
             header: t("price"),
             align: "right" as const,
             className: "font-mono tabular-nums",
-            cell: (b: Row) =>
-              b.agreedPrice
-                ? `${num(Number(b.agreedPrice), 2)} ${b.currency ?? ""}`
-                : "—",
+            cell: (b: Row) => b.priceText,
           },
         ]
       : []),
