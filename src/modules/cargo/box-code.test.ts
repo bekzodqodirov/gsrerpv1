@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { letterCodeForIndex, buildBoxCode, buildBoxQr } from "./box-code";
+import {
+  letterCodeForIndex,
+  buildBoxCode,
+  buildBoxQr,
+  nextLetterSeqs,
+} from "./box-code";
 
 describe("letterCodeForIndex", () => {
   it("maps single letters A..Z", () => {
@@ -23,6 +28,45 @@ describe("letterCodeForIndex", () => {
   it("produces 702 distinct codes across one cycle", () => {
     const set = new Set(Array.from({ length: 702 }, (_, i) => letterCodeForIndex(i)));
     expect(set.size).toBe(702);
+  });
+});
+
+describe("nextLetterSeqs (per-client continuing letters)", () => {
+  it("first receipt of a client starts at A, B", () => {
+    const { seqs, newLast } = nextLetterSeqs(0, 2);
+    expect(seqs.map(letterCodeForIndex)).toEqual(["A", "B"]);
+    expect(newLast).toBe(2);
+  });
+
+  it("next receipt CONTINUES (C, D) instead of restarting", () => {
+    // Mijozning oldingi prixodidan keyin lastSeq = 2.
+    const { seqs, newLast } = nextLetterSeqs(2, 2);
+    expect(seqs.map(letterCodeForIndex)).toEqual(["C", "D"]);
+    expect(newLast).toBe(4);
+  });
+
+  it("keeps continuing across many receipts (E, F, G)", () => {
+    expect(nextLetterSeqs(4, 3).seqs.map(letterCodeForIndex)).toEqual([
+      "E",
+      "F",
+      "G",
+    ]);
+  });
+
+  it("resets to A after ZZ (701)", () => {
+    // 700 dan boshlab 3 ta: ZY, ZZ, keyin A ga qaytadi.
+    expect(nextLetterSeqs(700, 3).seqs.map(letterCodeForIndex)).toEqual([
+      "ZY",
+      "ZZ",
+      "A",
+    ]);
+  });
+
+  it("reuses existing seqs on edit (no shift), then continues", () => {
+    // Tahrir: 2 eski (0,1) + 1 yangi -> A, B, keyin C (lastSeq=2 dan).
+    const { seqs, newLast } = nextLetterSeqs(2, 3, [0, 1]);
+    expect(seqs.map(letterCodeForIndex)).toEqual(["A", "B", "C"]);
+    expect(newLast).toBe(3); // faqat 1 ta yangi harf ajratildi
   });
 });
 

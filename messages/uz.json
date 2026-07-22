@@ -102,7 +102,8 @@
     "notHere": "Bu yuk sizning omboringizda emas",
     "deletePermanently": "Butunlay o'chirish",
     "deleteHint": "Qaytarilgan yuk butunlay o'chiriladi (ro'yxatlardan yo'qoladi). Bu amalni ortga qaytarib bo'lmaydi.",
-    "deleteConfirm": "Ha, o'chirish"
+    "deleteConfirm": "Ha, o'chirish",
+    "returnedList": "Qaytarilganlar"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",
@@ -337,7 +338,9 @@
     "palletUnits": "Yashiklar (paddon)",
     "palletUnitsHint": "Yopiq yashik = 1 birlik. QR/ID sini bir marta skan qilsangiz — butun yashik yuklanadi.",
     "palletReserved": "Bu yashik boshqa ochiq partiyada band",
-    "palletNotReady": "Yashik yopilmagan yoki bu omborda emas"
+    "palletNotReady": "Yashik yopilmagan yoki bu omborda emas",
+    "confirmPlan": "Planni tasdiqlash",
+    "confirmPlanHint": "Avval plan tuzing — keyin tasdiqlab skladchiga yuklashga berasiz."
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

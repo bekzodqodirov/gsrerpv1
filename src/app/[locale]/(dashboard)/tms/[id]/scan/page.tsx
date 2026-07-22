@@ -18,24 +18,25 @@ export default async function BatchScanPage({
   if (!info) notFound();
 
   const { batch, origin, dest, loadProgress, unloadProgress, canLoad } = info;
-  const editable = batch.status === "planned" || batch.status === "loading";
+  // Yuklash skani FAQAT plan tasdiqlangandan keyin (status=loading).
+  const loadable = batch.status === "loading";
   const unloadable = batch.status === "departed" || batch.status === "arrived";
 
   // Scan qilib bo'lmaydigan holat — obzorga qaytaramiz.
-  if (!canLoad || (!editable && !unloadable)) {
+  if (!canLoad || (!loadable && !unloadable)) {
     redirect({ href: `/tms/${id}`, locale });
   }
   // Sklad tomoni mos emas: yuklashni faqat jo'natuvchi, tushirishni faqat
   // qabul qiluvchi ombor xodimi qiladi — aks holda obzorga.
-  if ((editable && !info.canScanLoad) || (unloadable && !info.canScanUnload)) {
+  if ((loadable && !info.canScanLoad) || (unloadable && !info.canScanUnload)) {
     redirect({ href: `/tms/${id}`, locale });
   }
   // Plan hali tuzilmagan bo'lsa scan qilishga narsa yo'q.
-  if (editable && loadProgress.total === 0) {
+  if (loadable && loadProgress.total === 0) {
     redirect({ href: `/tms/${id}`, locale });
   }
 
-  const mode = editable ? "load" : "unload";
+  const mode = loadable ? "load" : "unload";
   const prog = mode === "load" ? loadProgress : unloadProgress;
   // Qo'lda belgilash paneli uchun plandagi qatorlar (stiker yo'q holati).
   const scanLines = await getScanLines(id);

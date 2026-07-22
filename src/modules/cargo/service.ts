@@ -1,6 +1,6 @@
 // Yuk servisi: ko'p qatorli qabul, karobka QR kodlari, ro'yxat, tafsilot.
 // Sklad xodimi (session.warehouseId bor) faqat o'z skladida ishlaydi.
-import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
@@ -18,7 +18,7 @@ import {
 import { requirePermission } from "@/modules/shared/auth";
 import { nextNumber } from "@/modules/shared/numbering";
 import { RESTING_STATUSES } from "@/modules/stock/dto";
-import { letterCodeForIndex, buildBoxQr } from "./box-code";
+import { letterCodeForIndex, buildBoxQr, nextLetterSeqs } from "./box-code";
 import {
   receiveCargoSchema,
   computeLineTotals,
@@ -223,6 +223,8 @@ async function allocateClientLetters(
   const reuseSorted = [...reuse].sort((a, b) => a - b).slice(0, count);
   const extra = count - reuseSorted.length;
 
+  // Yangi harflar kerak bo'lsa — hisoblagichni ATOMAR oshiramiz (poyga bo'lmasin)
+  // va oldingi qiymatdan (freshBase) davom ettiramiz. Sof math nextLetterSeqs'da.
   let freshBase = 0;
   if (extra > 0) {
     const [row] = await tx
@@ -232,16 +234,7 @@ async function allocateClientLetters(
       .returning({ last: clients.lastLetterSeq });
     freshBase = Number(row.last) - extra;
   }
-
-  const seqs: number[] = [];
-  for (let i = 0; i < count; i++) {
-    seqs.push(
-      i < reuseSorted.length
-        ? reuseSorted[i]
-        : freshBase + (i - reuseSorted.length),
-    );
-  }
-  return seqs;
+  return nextLetterSeqs(freshBase, count, reuseSorted).seqs;
 }
 
 async function insertLinesAndBoxes(
@@ -311,6 +304,10 @@ export async function listCargos(filter: CargoListFilter = {}) {
   }
   if (filter.status) {
     conds.push(eq(cargos.status, filter.status));
+  } else {
+    // Qaytarilgan yuklar UMUMIY ro'yxatda ko'rinmaydi — ular alohida
+    // "Qaytarilganlar" ro'yxatida (status='returned' bilan so'ralganda).
+    conds.push(ne(cargos.status, "returned"));
   }
   if (filter.q) {
     const q = `%${filter.q}%`;

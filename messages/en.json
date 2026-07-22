@@ -102,7 +102,8 @@
     "notHere": "This cargo is not at your warehouse",
     "deletePermanently": "Delete permanently",
     "deleteHint": "The returned cargo will be permanently removed (gone from all lists). This cannot be undone.",
-    "deleteConfirm": "Yes, delete"
+    "deleteConfirm": "Yes, delete",
+    "returnedList": "Returned"
   },
   "cargoStatus": {
     "received_cn": "Received in China",
@@ -337,7 +338,9 @@
     "palletUnits": "Pallets",
     "palletUnitsHint": "A closed pallet = 1 unit. One QR/ID scan loads the whole pallet.",
     "palletReserved": "This pallet is reserved in another batch",
-    "palletNotReady": "Pallet is not closed or not at this warehouse"
+    "palletNotReady": "Pallet is not closed or not at this warehouse",
+    "confirmPlan": "Confirm plan",
+    "confirmPlanHint": "Build the plan first, then confirm to hand it to the worker for loading."
   },
   "batchStatus": {
     "planned": "Planned",

@@ -1339,7 +1339,9 @@ export async function scanLoad(batchId: string, code: string): Promise<ScanResul
   const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
   if (!b) throw new Error("NOT_FOUND");
   assertWarehouseScope(session, b.originWarehouseId);
-  if (b.status !== "planned" && b.status !== "loading") {
+  // Yuklash FAQAT plan TASDIQLANGANDAN keyin (status=loading). "planned"
+  // holatida menejer hali plan tuzyapti — skladchi skanerlay olmaydi.
+  if (b.status !== "loading") {
     return { outcome: "wrong_status", code };
   }
 
