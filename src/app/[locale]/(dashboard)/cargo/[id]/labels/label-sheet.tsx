@@ -36,39 +36,59 @@ const SIZES: Size[] = [
   { id: "a4", name: "A4", pw: 210, ph: 297, cw: 150, ch: 100 },
 ];
 
-/** CLIENT-HARF kodini bitta qatorga sig'diradigan shrift o'lchami (mm). */
-function codeFontMm(s: Size, text: string): number {
-  const gx = s.ch * 0.06;
-  const avail = s.cw - 2 * gx; // mm
-  const fit = avail / (Math.max(text.length, 1) * 0.62); // qalin Arial ~0.62em/belgi
-  return Math.min(s.ch * 0.34, fit);
+/**
+ * Har zonaning MILLIMETRDAGI aniq balandligi (jami = karta balandligi — hC
+ * shu bilan hisoblanadi, shuning uchun har doim aniq ch ga teng bo'ladi).
+ * Aniq balandlik + har qatorda alohida overflow:hidden — zonalar bir-birining
+ * USTIGA CHIQMASLIGINI kafolatlaydi (flex-shrink asosidagi eski usulda katta
+ * shrift/QR qo'shni qatorga toshib, ustma-ust tushib qolardi).
+ */
+function metrics(s: Size) {
+  const ch = s.ch;
+  const cw = s.cw;
+  const hA = ch * 0.16; // sklad + tartib
+  const hB = ch * 0.32; // CLIENT-HARF (asosiy)
+  const hD = ch * 0.18; // unikal karobka ID
+  const hC = ch - hA - hB - hD; // QR + tovar nomi (qolgan joy)
+  const padX = cw * 0.06;
+  const qr = Math.min(hC * 0.85, cw * 0.42);
+  return { ch, cw, hA, hB, hC, hD, padX, qr };
+}
+
+/** Matn berilgan balandlik VA kenglikka sig'adigan eng katta shrift (mm). */
+function fitFont(maxHeightMm: number, maxWidthMm: number, text: string, charWidth = 0.62): number {
+  const byHeight = maxHeightMm * 0.8; // qator ichida joy qoldirish uchun
+  const byWidth = maxWidthMm / (Math.max(text.length, 1) * charWidth);
+  return Math.max(1, Math.min(byHeight, byWidth));
 }
 
 function buildCss(s: Size): string {
-  const ch = s.ch;
-  const cw = s.cw;
-  const gx = ch * 0.06;
-  const qr = Math.min(cw * 0.4, ch * 0.44);
+  const m = metrics(s);
   const hair = "0.25mm solid #000";
   return `
 .lbl-sheet { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; }
-.lbl-card { width:${cw}mm; height:${ch}mm; box-sizing:border-box; border:0.35mm solid #000; background:#fff; color:#000; display:flex; flex-direction:column; overflow:hidden; font-family:Arial,Helvetica,sans-serif; }
+.lbl-card { width:${m.cw}mm; height:${m.ch}mm; box-sizing:border-box; border:0.35mm solid #000; background:#fff; color:#000; display:flex; flex-direction:column; overflow:hidden; font-family:Arial,Helvetica,sans-serif; }
+
+/* Har zona — FLEX EMAS, aniq mm balandlik (flex:0 0 auto) + o'z overflow'i:
+   shu bilan hech qaysi zona qo'shnisiga bosib kirmaydi. */
 
 /* 1-zona: sklad (chapda) + karobka tartibi (o'ngda) — kichik */
-.lbl-head { display:flex; justify-content:space-between; align-items:center; gap:${gx}mm; padding:${ch * 0.05}mm ${gx}mm 0; }
-.lbl-og { font-weight:900; font-size:${ch * 0.1}mm; line-height:1; letter-spacing:0.02em; }
-.lbl-cnt { font-weight:800; font-size:${ch * 0.09}mm; border:${hair}; border-radius:1mm; padding:0 ${ch * 0.05}mm; white-space:nowrap; }
+.lbl-head { height:${m.hA}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; justify-content:space-between; align-items:center; gap:${m.padX}mm; padding:0 ${m.padX}mm; }
+.lbl-og { font-weight:900; font-size:${m.hA * 0.55}mm; line-height:1; letter-spacing:0.02em; white-space:nowrap; overflow:hidden; }
+.lbl-cnt { font-weight:800; font-size:${m.hA * 0.4}mm; border:${hair}; border-radius:1mm; padding:0 ${m.hA * 0.22}mm; white-space:nowrap; flex:none; }
 
 /* 2-zona (ENG MUHIM): CLIENT-HARF — butun kenglikda, bitta qatorda, katta */
-.lbl-code { font-weight:900; line-height:1; letter-spacing:-0.02em; white-space:nowrap; overflow:hidden; text-align:center; padding:${ch * 0.02}mm ${gx}mm; }
+.lbl-code { height:${m.hB}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:0 ${m.padX}mm; }
+.lbl-code span { display:block; font-weight:900; line-height:1; letter-spacing:-0.02em; white-space:nowrap; }
 
 /* 3-zona: QR (chapda) + tovar nomi (o'ngda) */
-.lbl-mid { flex:1; min-height:0; display:flex; align-items:center; gap:${gx}mm; padding:0 ${gx}mm ${ch * 0.02}mm; }
-.lbl-qr { width:${qr}mm; height:${qr}mm; flex:none; }
-.lbl-prod { flex:1; min-width:0; font-size:${ch * 0.1}mm; font-weight:600; color:#333; line-height:1.15; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.lbl-mid { height:${m.hC}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; align-items:center; gap:${m.padX}mm; padding:0 ${m.padX}mm; }
+.lbl-qr { width:${m.qr}mm; height:${m.qr}mm; flex:none; }
+.lbl-prod { flex:1; min-width:0; max-height:100%; font-size:${Math.min(m.hC * 0.24, m.cw * 0.09)}mm; font-weight:600; color:#333; line-height:1.2; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 
-/* 4-zona: unikal karobka ID — qora chiziqda, aniq ajralib turadi */
-.lbl-foot { background:#000; color:#fff; text-align:center; font-family:monospace; font-weight:700; font-size:${ch * 0.1}mm; letter-spacing:0.04em; padding:${ch * 0.045}mm 0; }
+/* 4-zona: unikal karobka ID — qora chiziqda, HAR DOIM bitta qatorda */
+.lbl-foot { height:${m.hD}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#000; padding:0 ${m.cw * 0.03}mm; }
+.lbl-foot span { display:block; color:#fff; font-family:monospace; font-weight:700; letter-spacing:0.02em; white-space:nowrap; }
 
 @media print {
   @page { size:${s.pw}mm ${s.ph}mm; margin:0; }
@@ -111,6 +131,7 @@ export function LabelSheet({
   }, [sizeId, ready]);
 
   const size = SIZES.find((s) => s.id === sizeId) ?? SIZES[0];
+  const m = metrics(size);
 
   return (
     <div>
@@ -152,32 +173,35 @@ export function LabelSheet({
       </p>
 
       <div className="lbl-sheet">
-        {labels.map((b) => (
-          <div className="lbl-wrap" key={b.key}>
-            <div className="lbl-card">
-              <div className="lbl-head">
-                <span className="lbl-og">{header.originGs}</span>
-                <span className="lbl-cnt">
-                  {b.position}/{b.boxCount}
-                </span>
+        {labels.map((b) => {
+          const codeText = `${b.clientCode}-${b.letterCode}`;
+          const codeFont = fitFont(m.hB, m.cw - 2 * m.padX, codeText);
+          const footPadX = m.cw * 0.03;
+          const footFont = fitFont(m.hD, m.cw - 2 * footPadX, b.qrCode);
+          return (
+            <div className="lbl-wrap" key={b.key}>
+              <div className="lbl-card">
+                <div className="lbl-head">
+                  <span className="lbl-og">{header.originGs}</span>
+                  <span className="lbl-cnt">
+                    {b.position}/{b.boxCount}
+                  </span>
+                </div>
+                <div className="lbl-code">
+                  <span style={{ fontSize: `${codeFont}mm` }}>{codeText}</span>
+                </div>
+                <div className="lbl-mid">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className="lbl-qr" src={b.qrDataUrl} alt={b.qrCode} />
+                  <div className="lbl-prod">{b.productName}</div>
+                </div>
+                <div className="lbl-foot">
+                  <span style={{ fontSize: `${footFont}mm` }}>{b.qrCode}</span>
+                </div>
               </div>
-              <div
-                className="lbl-code"
-                style={{
-                  fontSize: `${codeFontMm(size, `${b.clientCode}-${b.letterCode}`)}mm`,
-                }}
-              >
-                {b.clientCode}-{b.letterCode}
-              </div>
-              <div className="lbl-mid">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="lbl-qr" src={b.qrDataUrl} alt={b.qrCode} />
-                <div className="lbl-prod">{b.productName}</div>
-              </div>
-              <div className="lbl-foot">{b.qrCode}</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
