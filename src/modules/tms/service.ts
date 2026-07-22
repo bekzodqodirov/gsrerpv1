@@ -20,6 +20,7 @@ import {
 } from "@/db/schema";
 import type { ScanResult } from "./dto";
 import { palletBoxIds } from "@/modules/repack/service";
+import { splitCargoRemainder } from "@/modules/cargo/split";
 import { getSession, requirePermission } from "@/modules/shared/auth";
 import type { SessionPayload } from "@/modules/shared/session";
 import { nextNumber } from "@/modules/shared/numbering";
@@ -285,6 +286,7 @@ export async function getBatch(id: string) {
       boxes: cargos.totalBoxes,
       kg: cargos.totalWeightKg,
       m3: cargos.totalVolumeM3,
+      storageZone: cargos.storageZone,
       scanned: batchCargos.scanned,
       clientCode: clients.code,
       clientName: clients.name,
@@ -293,7 +295,8 @@ export async function getBatch(id: string) {
     .innerJoin(cargos, eq(batchCargos.cargoId, cargos.id))
     .innerJoin(clients, eq(cargos.clientId, clients.id))
     .where(eq(batchCargos.batchId, id))
-    .orderBy(asc(clients.code));
+    // Yuklash ro'yxati ZONA bo'yicha — skladchi tartib bilan yurib oladi.
+    .orderBy(asc(cargos.storageZone), asc(clients.code));
 
   const totals = items.reduce(
     (t, i) => ({
@@ -429,6 +432,7 @@ export async function getAvailableCargos(batchId: string) {
       boxes: cargos.totalBoxes,
       kg: cargos.totalWeightKg,
       m3: cargos.totalVolumeM3,
+      storageZone: cargos.storageZone,
       receivedAt: cargos.receivedAt,
       clientCode: clients.code,
       clientName: clients.name,
@@ -621,8 +625,53 @@ export async function scanLoad(batchId: string, code: string): Promise<ScanResul
     // Yashik (paddon) QR'i bo'lishi mumkin — ichidagi hamma karobkani yuklaymiz.
     const pal = await applyPalletScan(batchId, code, "load", session.sub);
     if (pal) return pal;
-    const known = await db.query.cargoBoxes.findFirst({ where: eq(cargoBoxes.qrCode, code) });
-    return { outcome: known ? "not_on_plan" : "unknown", code };
+
+    // Planda yo'q karobka: agar u SHU skladda, jo'natishga tayyor va boshqa
+    // ochiq partiyaga band bo'lmasa — "planga qo'shish" taklif qilamiz
+    // (mashinada joy ortganda skladchi keyingi karobkani scan qilib to'ldiradi).
+    const known = await db
+      .select({
+        cargoId: cargos.id,
+        cargoStatus: cargos.status,
+        cargoWh: cargos.currentWarehouseId,
+        product: cargoLines.productName,
+        clientCode: clients.code,
+      })
+      .from(cargoBoxes)
+      .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
+      .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
+      .innerJoin(clients, eq(cargos.clientId, clients.id))
+      .where(eq(cargoBoxes.qrCode, code))
+      .limit(1);
+    const kb = known[0];
+    if (!kb) return { outcome: "unknown", code };
+
+    const origin = await db.query.warehouses.findFirst({
+      where: eq(warehouses.id, b.originWarehouseId),
+    });
+    const eligible =
+      origin &&
+      kb.cargoWh === b.originWarehouseId &&
+      kb.cargoStatus === sourceStatusForOrigin(origin.kind);
+    if (eligible) {
+      const busy = await db
+        .select({ id: batchCargos.batchId })
+        .from(batchCargos)
+        .innerJoin(batches, eq(batchCargos.batchId, batches.id))
+        .where(
+          and(eq(batchCargos.cargoId, kb.cargoId), ne(batches.status, "closed")),
+        )
+        .limit(1);
+      if (busy.length === 0) {
+        return {
+          outcome: "can_add",
+          code,
+          cargoId: kb.cargoId,
+          label: `${kb.clientCode} · ${kb.product}`,
+        };
+      }
+    }
+    return { outcome: "not_on_plan", code };
   }
   if (hit.loaded) {
     const p = await loadProgress(batchId);
@@ -703,7 +752,10 @@ export async function startLoading(batchId: string) {
 }
 
 /** Jo'natish: tarkibdagi yuklar yo'lga chiqadi (qoldiqdan chiqadi). */
-export async function departBatch(batchId: string) {
+export async function departBatch(
+  batchId: string,
+  opts: { leaveUnscanned?: boolean } = {},
+) {
   const session = await requireAny(["tms.manage", "tms.load"]);
   const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
   if (!b) throw new Error("NOT_FOUND");
@@ -716,21 +768,84 @@ export async function departBatch(batchId: string) {
   if (!dest) throw new Error("WAREHOUSE_NOT_FOUND");
   const { inTransit } = legStatuses(dest.country, dest.kind);
 
-  const items = await db
-    .select({ cargoId: batchCargos.cargoId, status: cargos.status })
-    .from(batchCargos)
-    .innerJoin(cargos, eq(batchCargos.cargoId, cargos.id))
-    .where(eq(batchCargos.batchId, batchId));
-  if (items.length === 0) throw new Error("EMPTY_BATCH");
-
-  // Har karobka scan qilingan bo'lishi SHART — aks holda jo'natilmaydi.
   const prog = await loadProgress(batchId);
   if (prog.total === 0) throw new Error("EMPTY_BATCH");
-  if (prog.done < prog.total) {
+  // Har karobka scan qilingan bo'lishi SHART. Scan qilinmaganlar bo'lsa —
+  // faqat ochiq tasdiq bilan (leaveUnscanned): ular skladda QOLADI.
+  if (prog.done < prog.total && !opts.leaveUnscanned) {
     throw new Error(`LOAD_INCOMPLETE:${prog.done}:${prog.total}`);
   }
+  if (prog.done === 0) throw new Error("NOTHING_SCANNED");
 
+  let leftBehind = 0;
   await db.transaction(async (tx) => {
+    // 1) Scan qilinmagan karobkalar — skladda qoladi:
+    //    - prixodning HAMMA karobkasi scan qilinmagan bo'lsa: prixod plandan
+    //      butunlay chiqariladi (skladda o'z holicha qolaveradi);
+    //    - QISMAN scan qilingan bo'lsa: prixod bo'linadi — scan qilinmaganlari
+    //      "qoldiq prixod" (reg-R1) bo'lib skladda qoladi.
+    const unscanned: { id: string; boxId: string; cargoId: string }[] = await tx
+      .select({
+        id: batchBoxes.id,
+        boxId: batchBoxes.boxId,
+        cargoId: batchBoxes.cargoId,
+      })
+      .from(batchBoxes)
+      .where(
+        and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, false)),
+      );
+    if (unscanned.length > 0) {
+      leftBehind = unscanned.length;
+      const planned: { cargoId: string; n: number }[] = await tx
+        .select({ cargoId: batchBoxes.cargoId, n: count() })
+        .from(batchBoxes)
+        .where(eq(batchBoxes.batchId, batchId))
+        .groupBy(batchBoxes.cargoId);
+      const plannedByCargo = new Map(planned.map((p) => [p.cargoId, Number(p.n)]));
+
+      const byCargo = new Map<string, { bbIds: string[]; boxIds: string[] }>();
+      for (const u of unscanned) {
+        const g = byCargo.get(u.cargoId) ?? { bbIds: [], boxIds: [] };
+        g.bbIds.push(u.id);
+        g.boxIds.push(u.boxId);
+        byCargo.set(u.cargoId, g);
+      }
+
+      for (const [cargoId, g] of byCargo) {
+        if (g.boxIds.length === (plannedByCargo.get(cargoId) ?? 0)) {
+          // Umuman yuklanmagan prixod — plandan chiqadi, skladda qoladi.
+          await tx
+            .delete(batchBoxes)
+            .where(
+              and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.cargoId, cargoId)),
+            );
+          await tx
+            .delete(batchCargos)
+            .where(
+              and(
+                eq(batchCargos.batchId, batchId),
+                eq(batchCargos.cargoId, cargoId),
+              ),
+            );
+        } else {
+          // Qisman: qoldiq prixodga bo'linadi.
+          await splitCargoRemainder(tx, cargoId, g.boxIds, {
+            note: `${b.code} sig'madi — qoldiq`,
+            userId: session.sub,
+          });
+          await tx.delete(batchBoxes).where(inArray(batchBoxes.id, g.bbIds));
+        }
+      }
+    }
+
+    // 2) Qolgan (to'liq scan qilingan) yuklar jo'naydi.
+    const items: { cargoId: string; status: string }[] = await tx
+      .select({ cargoId: batchCargos.cargoId, status: cargos.status })
+      .from(batchCargos)
+      .innerJoin(cargos, eq(batchCargos.cargoId, cargos.id))
+      .where(eq(batchCargos.batchId, batchId));
+    if (items.length === 0) throw new Error("EMPTY_BATCH");
+
     for (const it of items) {
       await tx
         .update(cargos)
@@ -756,8 +871,21 @@ export async function departBatch(batchId: string) {
     action: "depart",
     entity: "batch",
     entityId: batchId,
-    payload: { code: b.code, cargos: items.length },
+    payload: { code: b.code, leftBehind },
   });
+}
+
+/**
+ * Scan-to-add: planda yo'q (lekin shu skladda bo'sh) karobka scan qilinganda
+ * bir bosishda prixod planga qo'shilib, karobka darhol yuklanadi.
+ */
+export async function addCargoAndScanLoad(
+  batchId: string,
+  cargoId: string,
+  code: string,
+): Promise<ScanResult> {
+  await addCargoToBatch(batchId, cargoId); // ruxsat + plan holati + origin tekshiradi
+  return scanLoad(batchId, code);
 }
 
 export async function arriveBatch(batchId: string) {

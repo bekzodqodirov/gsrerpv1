@@ -6,7 +6,11 @@ import jsQR from "jsqr";
 import { Card, Button } from "@/components/ui";
 import { icons } from "@/components/icons";
 import type { ScanResult } from "@/modules/tms/dto";
-import { scanLoadAction, scanUnloadAction } from "../actions";
+import {
+  scanLoadAction,
+  scanUnloadAction,
+  addCargoAndScanAction,
+} from "../actions";
 
 type Mode = "load" | "unload";
 
@@ -18,6 +22,7 @@ const OUTCOME_STYLE: Record<
   loaded: { cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100", good: true },
   unloaded: { cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100", good: true },
   duplicate: { cls: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100", good: false },
+  can_add: { cls: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100", good: false },
   not_on_plan: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
   extra: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
   unknown: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
@@ -66,6 +71,13 @@ export function ScanPanel({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [camOn, setCamOn] = useState(false);
   const [camErr, setCamErr] = useState<string | null>(null);
+  // "Planga qo'shish" natijasi — qaysi scan javobiga tegishliligi bilan birga
+  // saqlanadi: yangi scan kelsa (state almashsa) o'z-o'zidan eskiradi.
+  const [override, setOverride] = useState<{
+    base: ScanResult;
+    result: ScanResult;
+  } | null>(null);
+  const [adding, setAdding] = useState(false);
   const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
 
   // Har javobdan keyin ovoz + inputni tozalab, fokusni qaytaramiz.
@@ -75,6 +87,19 @@ export function ScanPanel({
     if (inputRef.current) inputRef.current.value = "";
     inputRef.current?.focus();
   }, [state]);
+
+  async function handleAddToPlan(res: ScanResult) {
+    if (!res.cargoId || adding) return;
+    setAdding(true);
+    try {
+      const r = await addCargoAndScanAction(batchId, res.cargoId, res.code);
+      setOverride({ base: res, result: r });
+      beep(OUTCOME_STYLE[r.outcome]?.good ?? false);
+    } finally {
+      setAdding(false);
+      inputRef.current?.focus();
+    }
+  }
 
   // Kamera: jsQR bilan har kadrni o'qiymiz.
   useEffect(() => {
@@ -130,8 +155,9 @@ export function ScanPanel({
     };
   }, [camOn, t]);
 
-  const shownDone = state?.total != null ? state.done! : done;
-  const shownTotal = state?.total != null ? state.total : total;
+  const shown = override && override.base === state ? override.result : state;
+  const shownDone = shown?.total != null ? shown.done! : done;
+  const shownTotal = shown?.total != null ? shown.total : total;
   const pct = shownTotal ? Math.min(100, (shownDone / shownTotal) * 100) : 0;
   const complete = shownTotal > 0 && shownDone >= shownTotal;
 
@@ -196,16 +222,27 @@ export function ScanPanel({
       {camErr && <p className="mt-2 text-xs text-red-600">{camErr}</p>}
 
       {/* oxirgi natija */}
-      {state && (
+      {shown && (
         <div
           className={
-            "mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium " +
-            (OUTCOME_STYLE[state.outcome]?.cls ?? "")
+            "mt-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium " +
+            (OUTCOME_STYLE[shown.outcome]?.cls ?? "")
           }
         >
-          <span className="font-mono text-xs">{state.code}</span>
-          <span>— {t(("scan_" + state.outcome) as "scan_loaded")}</span>
-          {state.label && <span className="ml-auto text-xs opacity-80">{state.label}</span>}
+          <span className="font-mono text-xs">{shown.code}</span>
+          <span>— {t(("scan_" + shown.outcome) as "scan_loaded")}</span>
+          {shown.label && <span className="ml-auto text-xs opacity-80">{shown.label}</span>}
+          {shown.outcome === "can_add" && shown.cargoId && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => handleAddToPlan(shown)}
+              disabled={adding}
+              className="ml-auto"
+            >
+              {adding ? "…" : t("addToPlan")}
+            </Button>
+          )}
         </div>
       )}
 

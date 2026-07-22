@@ -186,7 +186,8 @@
     "capacityKg": "容量 (kg)",
     "save": "保存",
     "saved": "已保存",
-    "warehouse": "仓库"
+    "warehouse": "仓库",
+    "zone": "库位"
   },
   "tms": {
     "title": "批次 (TMS)",
@@ -265,7 +266,16 @@
     "totalVolume": "总体积, m³",
     "totalWeight": "总重量, kg",
     "totalBoxes": "箱数",
-    "clients": "客户"
+    "clients": "客户",
+    "zone": "库位",
+    "scan_can_add": "不在计划中 — 可添加",
+    "addToPlan": "加入计划",
+    "departPartial": "发车（留下 {n}）",
+    "departPartialTitle": "部分发车",
+    "departPartialNote": "未扫描的箱子将留在仓库。部分装车的收货单会被拆分——剩余部分成为独立收货单（编号-R1），并出现在下一辆车的清单中。",
+    "willStay": "留下",
+    "departConfirm": "确认并发车",
+    "cancel": "取消"
   },
   "batchStatus": {
     "planned": "已计划",

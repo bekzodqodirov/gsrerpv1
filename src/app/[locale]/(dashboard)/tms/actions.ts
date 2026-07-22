@@ -14,6 +14,7 @@ import {
   closeBatch,
   scanLoad,
   scanUnload,
+  addCargoAndScanLoad,
 } from "@/modules/tms/service";
 import {
   batchCreateSchema,
@@ -110,6 +111,12 @@ export async function departAction(batchId: string) {
   revalidateTms();
 }
 
+/** Qisman jo'natish: scan qilinmagan karobkalar tasdiq bilan skladda qoladi. */
+export async function departPartialAction(batchId: string) {
+  await departBatch(batchId, { leaveUnscanned: true });
+  revalidateTms();
+}
+
 export async function arriveAction(batchId: string) {
   await arriveBatch(batchId);
   revalidateTms();
@@ -149,6 +156,19 @@ export async function scanUnloadAction(
   const parsed = scanSchema.safeParse({ code });
   if (!parsed.success) return { outcome: "unknown", code };
   const res = await scanUnload(batchId, parsed.data.code);
+  revalidateTms();
+  return res;
+}
+
+/** Scan-to-add: "planga qo'shish" tugmasi — qo'shadi va darhol scan qiladi. */
+export async function addCargoAndScanAction(
+  batchId: string,
+  cargoId: string,
+  code: string,
+): Promise<ScanResult> {
+  const parsed = scanSchema.safeParse({ code });
+  if (!parsed.success) return { outcome: "unknown", code };
+  const res = await addCargoAndScanLoad(batchId, cargoId, parsed.data.code);
   revalidateTms();
   return res;
 }

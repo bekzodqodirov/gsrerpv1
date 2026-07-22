@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { Link } from "@/i18n/routing";
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { Link, useRouter } from "@/i18n/routing";
+import { setZoneAction } from "./zone-actions";
 import {
   Card,
   StatCard,
@@ -54,6 +55,7 @@ type CargoStockRow = {
   weightKg: number;
   volumeM3: number;
   days: number;
+  zone: string | null;
 };
 type WarehouseBox = {
   qrCode: string;
@@ -66,7 +68,37 @@ type WarehouseBox = {
   productName: string;
   days: number;
   flag: string | null;
+  zone: string | null;
 };
+
+/** Zona inline muharriri: kiritib Enter/saqlash — darrov yoziladi. */
+function ZoneEditor({ cargoId, zone }: { cargoId: string; zone: string | null }) {
+  const router = useRouter();
+  const [value, setValue] = useState(zone ?? "");
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    if (value.trim() === (zone ?? "")) return;
+    startTransition(async () => {
+      await setZoneAction(cargoId, value);
+      router.refresh();
+    });
+  }
+
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      disabled={pending}
+      placeholder="—"
+      className="h-8 w-16 rounded-md border border-line bg-surface px-2 text-center font-mono text-xs font-bold outline-none focus:border-primary disabled:opacity-50"
+    />
+  );
+}
 type Detail = {
   warehouse: {
     id: string;
@@ -96,6 +128,7 @@ export function WarehouseDetail({
   locale,
   labels,
   canLoad,
+  canSetZone,
   loadingHref,
 }: {
   detail: Detail;
@@ -103,6 +136,7 @@ export function WarehouseDetail({
   locale: string;
   labels: DetailLabels;
   canLoad: boolean;
+  canSetZone: boolean;
   loadingHref: string;
 }) {
   const L = labels;
@@ -351,6 +385,7 @@ export function WarehouseDetail({
         <TableWrap>
           <thead>
             <tr>
+              <Th>{L.zone}</Th>
               <Th>{L.regNumber}</Th>
               <Th>{L.client}</Th>
               <Th>{L.status}</Th>
@@ -362,10 +397,21 @@ export function WarehouseDetail({
           </thead>
           <tbody>
             {shownCargos.length === 0 ? (
-              <EmptyRow colSpan={7} text={L.noMatch} />
+              <EmptyRow colSpan={8} text={L.noMatch} />
             ) : (
               shownCargos.map((c) => (
                 <TRow key={c.cargoId}>
+                  <Td>
+                    {canSetZone ? (
+                      <ZoneEditor cargoId={c.cargoId} zone={c.zone} />
+                    ) : c.zone ? (
+                      <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
+                        {c.zone}
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </Td>
                   <Td className="font-mono text-xs font-semibold">
                     <Link
                       href={`/cargo/${c.cargoId}`}
@@ -409,6 +455,7 @@ export function WarehouseDetail({
         <TableWrap>
           <thead>
             <tr>
+              <Th>{L.zone}</Th>
               <Th>{L.qr}</Th>
               <Th>{L.client}</Th>
               <Th>{L.letter}</Th>
@@ -419,10 +466,19 @@ export function WarehouseDetail({
           </thead>
           <tbody>
             {shownBoxes.length === 0 ? (
-              <EmptyRow colSpan={6} text={L.noMatch} />
+              <EmptyRow colSpan={7} text={L.noMatch} />
             ) : (
               shownBoxes.map((b) => (
                 <TRow key={b.qrCode}>
+                  <Td>
+                    {b.zone ? (
+                      <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
+                        {b.zone}
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </Td>
                   <Td className="font-mono text-xs font-semibold">
                     <Link
                       href={`/cargo/${b.cargoId}`}

@@ -186,7 +186,8 @@
     "capacityKg": "Capacity (kg)",
     "save": "Save",
     "saved": "Saved",
-    "warehouse": "Warehouse"
+    "warehouse": "Warehouse",
+    "zone": "Zone"
   },
   "tms": {
     "title": "Batches (TMS)",
@@ -265,7 +266,16 @@
     "totalVolume": "Total volume, m³",
     "totalWeight": "Total weight, kg",
     "totalBoxes": "Boxes",
-    "clients": "Clients"
+    "clients": "Clients",
+    "zone": "Zone",
+    "scan_can_add": "Not on plan — can add",
+    "addToPlan": "Add to plan",
+    "departPartial": "Depart (leave {n})",
+    "departPartialTitle": "Partial departure",
+    "departPartialNote": "Unscanned boxes will STAY AT THE WAREHOUSE. Partially loaded receipts are split — the remainder becomes a separate receipt (reg-R1) and appears in the next truck's list.",
+    "willStay": "Stays",
+    "departConfirm": "Confirm & depart",
+    "cancel": "Cancel"
   },
   "batchStatus": {
     "planned": "Planned",

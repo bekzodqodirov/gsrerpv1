@@ -181,6 +181,7 @@ export type CargoStockRow = {
   volumeM3: number;
   receivedAt: Date;
   days: number;
+  zone: string | null;
 };
 
 /** Bitta ombor tafsiloti: mijozlar kesimida + yuklar ro'yxati (FIFO). */
@@ -211,6 +212,7 @@ export async function getWarehouseStock(warehouseId: string): Promise<{
       boxes: cargos.totalBoxes,
       kg: cargos.totalWeightKg,
       m3: cargos.totalVolumeM3,
+      zone: cargos.storageZone,
       receivedAt: cargos.receivedAt,
       clientId: clients.id,
       clientCode: clients.code,
@@ -239,6 +241,7 @@ export async function getWarehouseStock(warehouseId: string): Promise<{
     volumeM3: Number(r.m3),
     receivedAt: r.receivedAt,
     days: daysSince(r.receivedAt, now),
+    zone: r.zone,
   }));
 
   const byClient = new Map<string, ClientStock>();
@@ -304,6 +307,7 @@ export type WarehouseBox = {
   productName: string;
   days: number;
   flag: string | null;
+  zone: string | null;
 };
 
 /**
@@ -331,6 +335,7 @@ export async function getWarehouseBoxes(
       flag: cargoBoxes.flag,
       cargoId: cargos.id,
       regNumber: cargos.regNumber,
+      zone: cargos.storageZone,
       receivedAt: cargos.receivedAt,
       clientCode: clients.code,
       clientName: clients.name,
@@ -361,9 +366,34 @@ export async function getWarehouseBoxes(
     productName: r.productName,
     days: daysSince(r.receivedAt, now),
     flag: r.flag,
+    zone: r.zone,
   }));
 
   return { warehouse: wh, boxes };
+}
+
+/**
+ * Prixodning sklad ichidagi zonasini o'rnatish (A, B, 1-qator...).
+ * Sklad xodimi faqat o'z skladidagi yukka zona qo'ya oladi.
+ */
+export async function setCargoZone(cargoId: string, zone: string) {
+  const session = await requirePermission("cargo.move");
+  const cargo = await db.query.cargos.findFirst({
+    where: eq(cargos.id, cargoId),
+    columns: { id: true, currentWarehouseId: true },
+  });
+  if (!cargo) throw new Error("NOT_FOUND");
+  if (
+    session.warehouseId &&
+    cargo.currentWarehouseId !== session.warehouseId
+  ) {
+    throw new Error("NOT_FOUND");
+  }
+  const clean = zone.trim().slice(0, 32);
+  await db
+    .update(cargos)
+    .set({ storageZone: clean || null, updatedAt: new Date() })
+    .where(eq(cargos.id, cargoId));
 }
 
 /** Sozlamalar uchun: barcha omborlar (sig'im tahriri). */

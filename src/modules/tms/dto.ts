@@ -42,6 +42,7 @@ export type ScanOutcome =
   | "unloaded" //    karobka qabul qilindi
   | "duplicate" //   allaqachon scan qilingan
   | "not_on_plan" // haqiqiy karobka, lekin bu partiyaga tegishli emas
+  | "can_add" //     planda yo'q, LEKIN shu skladda bo'sh — planga qo'shsa bo'ladi
   | "extra" //       manifestda yo'q karobka tushirildi (ortiqcha)
   | "unknown" //     bunday QR umuman topilmadi
   | "wrong_status"; // partiya holati scan qilishga mos emas
@@ -52,6 +53,8 @@ export type ScanResult = {
   label?: string; // "GSR-1007 · Mebel furnitura · 12/50"
   done?: number;
   total?: number;
+  // can_add uchun: qaysi prixodni planga qo'shish taklif qilinmoqda.
+  cargoId?: string;
 };
 
 /**

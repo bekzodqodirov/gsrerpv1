@@ -98,6 +98,9 @@ export default async function StockPage({
       const canLoad = Boolean(
         session?.perms.includes("*") || session?.perms.includes("tms.manage"),
       );
+      const canSetZone = Boolean(
+        session?.perms.includes("*") || session?.perms.includes("cargo.move"),
+      );
       const loadingHref =
         detail.warehouse.kind === "consolidation" ? "/tms/consolidation" : "/tms";
       return (
@@ -107,6 +110,7 @@ export default async function StockPage({
           locale={locale}
           labels={pickDetailLabels(t, ts)}
           canLoad={canLoad}
+          canSetZone={canSetZone}
           loadingHref={loadingHref}
         />
       );
@@ -348,7 +352,7 @@ function pickDetailLabels(
     "tabClients", "tabCargos", "tabBoxes", "search", "filterAge", "all",
     "age_fresh", "age_warn", "age_old", "age_critical",
     "startLoading", "print", "stocktake", "utilization",
-    "box", "product", "letter", "qr", "flag", "noMatch",
+    "box", "product", "letter", "qr", "flag", "noMatch", "zone",
   ];
   const out = {} as DetailLabels;
   for (const k of keys) out[k] = t(k as "empty");

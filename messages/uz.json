@@ -186,7 +186,8 @@
     "capacityKg": "Sig'im (kg)",
     "save": "Saqlash",
     "saved": "Saqlandi",
-    "warehouse": "Ombor"
+    "warehouse": "Ombor",
+    "zone": "Zona"
   },
   "tms": {
     "title": "Partiyalar (TMS)",
@@ -265,7 +266,16 @@
     "totalVolume": "Jami hajm, m³",
     "totalWeight": "Jami og'irlik, kg",
     "totalBoxes": "Karobka",
-    "clients": "Mijozlar"
+    "clients": "Mijozlar",
+    "zone": "Zona",
+    "scan_can_add": "Planda yo'q — qo'shish mumkin",
+    "addToPlan": "Planga qo'shish",
+    "departPartial": "Jo'natish ({n} qoldirib)",
+    "departPartialTitle": "Qisman jo'natish",
+    "departPartialNote": "Scan qilinmagan karobkalar SKLADDA QOLADI. Qisman yuklangan prixodlar bo'linadi — qoldiq alohida prixod (reg-R1) bo'lib qoladi va keyingi mashina ro'yxatida chiqadi.",
+    "willStay": "Qoladi",
+    "departConfirm": "Tasdiqlash va jo'natish",
+    "cancel": "Bekor qilish"
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

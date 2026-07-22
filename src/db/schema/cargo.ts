@@ -22,6 +22,7 @@ import {
   index,
   unique,
   customType,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { clients, warehouses } from "./catalog";
 import { users } from "./system";
@@ -84,6 +85,11 @@ export const cargos = pgTable(
 
     status: cargoStatusEnum("status").notNull().default("received_cn"),
     heldFromStatus: varchar("held_from_status", { length: 32 }),
+
+    // Sklad ichidagi joyi (zona/qator: A, B, 1-qator...) — yuklashda topish uchun.
+    storageZone: varchar("storage_zone", { length: 32 }),
+    // Qoldiq prixod: mashinaga sig'may bo'lingan bo'lsa — asl prixodga ishora.
+    splitFrom: uuid("split_from").references((): AnyPgColumn => cargos.id),
 
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),

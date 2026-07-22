@@ -26,6 +26,7 @@ import {
 } from "../actions";
 import { PrintButton } from "./print-button";
 import { ScanPanel } from "./scan-panel";
+import { DepartPartial } from "./depart-partial";
 
 export default async function BatchDetailPage({
   params,
@@ -127,13 +128,31 @@ export default async function BatchDetailPage({
             {batch.status === "planned" && (
               <ActionForm action={startLoadingAction.bind(null, id)} label={t("startLoading")} variant="outline" />
             )}
-            {(batch.status === "planned" || batch.status === "loading") && (
-              <ActionForm
-                action={departAction.bind(null, id)}
-                label={t("depart")}
-                disabled={!loadComplete}
-              />
-            )}
+            {(batch.status === "planned" || batch.status === "loading") &&
+              (loadComplete ? (
+                <ActionForm action={departAction.bind(null, id)} label={t("depart")} />
+              ) : loadProgress.done > 0 ? (
+                // Qisman yuklangan: tasdiq bilan jo'natish — scan qilinmaganlar qoladi.
+                <DepartPartial
+                  batchId={id}
+                  totalUnscanned={loadProgress.total - loadProgress.done}
+                  items={items
+                    .filter((i) => i.scan.loaded < i.scan.total)
+                    .map((i) => ({
+                      cargoId: i.cargoId,
+                      regNumber: i.regNumber,
+                      clientCode: i.clientCode,
+                      unscanned: i.scan.total - i.scan.loaded,
+                      total: i.scan.total,
+                    }))}
+                />
+              ) : (
+                <ActionForm
+                  action={departAction.bind(null, id)}
+                  label={t("depart")}
+                  disabled
+                />
+              ))}
             {editable && !loadComplete && loadProgress.total > 0 && (
               <span className="self-center text-xs text-muted">
                 {t("departBlocked", {
@@ -228,6 +247,7 @@ export default async function BatchDetailPage({
         <TableWrap>
           <thead>
             <tr>
+              <Th>{t("zone")}</Th>
               <Th>{t("client")}</Th>
               <Th>{t("regNumber")}</Th>
               <Th>{t("status")}</Th>
@@ -240,10 +260,19 @@ export default async function BatchDetailPage({
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <EmptyRow colSpan={editable && canLoad ? 8 : 7} text={t("noCargo")} />
+              <EmptyRow colSpan={editable && canLoad ? 9 : 8} text={t("noCargo")} />
             ) : (
               items.map((i) => (
                 <TRow key={i.cargoId}>
+                  <Td>
+                    {i.storageZone ? (
+                      <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
+                        {i.storageZone}
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </Td>
                   <Td>
                     <span className="font-mono text-xs font-bold">
                       {i.clientCode}
@@ -300,6 +329,7 @@ export default async function BatchDetailPage({
           <TableWrap>
             <thead>
               <tr>
+                <Th>{t("zone")}</Th>
                 <Th>{t("client")}</Th>
                 <Th>{t("regNumber")}</Th>
                 <Th className="text-right">{t("boxes")}</Th>
@@ -310,10 +340,19 @@ export default async function BatchDetailPage({
             </thead>
             <tbody>
               {available.length === 0 ? (
-                <EmptyRow colSpan={6} text={t("noAvailable")} />
+                <EmptyRow colSpan={7} text={t("noAvailable")} />
               ) : (
                 available.map((c) => (
                   <TRow key={c.cargoId}>
+                    <Td>
+                      {c.storageZone ? (
+                        <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
+                          {c.storageZone}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </Td>
                     <Td>
                       <span className="font-mono text-xs font-bold">
                         {c.clientCode}
