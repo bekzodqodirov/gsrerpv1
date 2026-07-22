@@ -89,7 +89,8 @@
     "compressing": "Compressing…",
     "boxLabels": "Box QR",
     "labelSize": "Label size",
-    "lineCode": "Code"
+    "lineCode": "Code",
+    "inBatch": "Batch"
   },
   "cargoStatus": {
     "received_cn": "Received in China",

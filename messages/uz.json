@@ -89,7 +89,8 @@
     "compressing": "Rasmlar siqilmoqda…",
     "boxLabels": "Karobka QR",
     "labelSize": "Etiket o'lchami",
-    "lineCode": "Kod"
+    "lineCode": "Kod",
+    "inBatch": "Partiya"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",

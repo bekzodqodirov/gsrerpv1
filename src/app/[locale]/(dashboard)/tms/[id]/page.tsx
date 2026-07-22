@@ -311,8 +311,7 @@ export default async function BatchDetailPage({
         <TableWrap>
           <thead>
             <tr>
-              <Th className="print:hidden">{t("photo")}</Th>
-              <Th>{t("zone")}</Th>
+              <Th>{t("photo")}</Th>
               <Th>{t("product")}</Th>
               <Th className="text-right">{t("planCol")}</Th>
               <Th className="text-right">{t("loadedCol")}</Th>
@@ -323,39 +322,32 @@ export default async function BatchDetailPage({
           </thead>
           <tbody>
             {lines.length === 0 ? (
-              <EmptyRow colSpan={8} text={t("noCargo")} />
+              <EmptyRow colSpan={7} text={t("noCargo")} />
             ) : (
               lines.map((l) => {
                 const remaining = Math.max(0, l.planned - l.loaded);
                 const complete = l.planned > 0 && l.loaded >= l.planned;
                 return (
                   <TRow key={l.lineId}>
-                    <Td className="print:hidden">
+                    {/* Rasm — kattaroq va bosishda ochiladi; skladchi tovarni
+                        ko'zi bilan taniydi (rasmga urg'u). */}
+                    <Td>
                       {l.photoId ? (
                         <PhotoThumbs
                           photos={[{ id: l.photoId, name: l.productName }]}
-                          thumbClass="h-10 w-10"
+                          thumbClass="h-16 w-16"
                         />
                       ) : (
-                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                          {icons.camera("h-4 w-4")}
+                        <span className="flex h-16 w-16 items-center justify-center rounded-lg bg-surface-2 text-muted">
+                          {icons.camera("h-5 w-5")}
                         </span>
                       )}
                     </Td>
                     <Td>
-                      {l.zone ? (
-                        <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary">
-                          {l.zone}
-                        </span>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <div className="font-mono text-sm font-black">
+                      <div className="text-sm font-semibold">{l.productName}</div>
+                      <div className="mt-0.5 font-mono text-sm font-black text-primary">
                         {l.clientCode}-{l.letterCode}
                       </div>
-                      <div className="max-w-52 truncate text-sm">{l.productName}</div>
                       <div className="font-mono text-[11px] text-muted">
                         {l.regNumber}
                         {l.missing > 0 && (

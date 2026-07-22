@@ -12,6 +12,8 @@ import {
   warehouses,
   auditLog,
   attachments,
+  batchCargos,
+  batches,
 } from "@/db/schema";
 import { requirePermission } from "@/modules/shared/auth";
 import { nextNumber } from "@/modules/shared/numbering";
@@ -408,6 +410,35 @@ export async function listCargos(filter: CargoListFilter = {}) {
     }
   }
 
+  // Yuk QAYSI partiyada ketyapti (ochiq/faol partiya) — ro'yxatda ko'rsatiladi.
+  const batchRows = cargoIds.length
+    ? await db
+        .select({
+          cargoId: batchCargos.cargoId,
+          batchId: batches.id,
+          code: batches.code,
+          status: batches.status,
+        })
+        .from(batchCargos)
+        .innerJoin(batches, eq(batchCargos.batchId, batches.id))
+        .where(
+          and(
+            inArray(batchCargos.cargoId, cargoIds),
+            inArray(batches.status, ["planned", "loading", "departed", "arrived"]),
+          ),
+        )
+    : [];
+  const batchByCargo = new Map<
+    string,
+    { batchId: string; code: string; status: string }
+  >();
+  for (const b of batchRows) {
+    // Bir yuk bir vaqtda faqat bitta ochiq partiyada bo'ladi — birinchisi yetarli.
+    if (!batchByCargo.has(b.cargoId)) {
+      batchByCargo.set(b.cargoId, { batchId: b.batchId, code: b.code, status: b.status });
+    }
+  }
+
   const linesByCargo = new Map<
     string,
     Array<(typeof lineRows)[number] & { photoId: string | null }>
@@ -437,6 +468,7 @@ export async function listCargos(filter: CargoListFilter = {}) {
     lines: linesByCargo.get(r.id) ?? [],
     photoId: firstPhotoByCargo.get(r.id) ?? null,
     files: filesByCargo.get(r.id) ?? [],
+    batch: batchByCargo.get(r.id) ?? null,
   }));
 }
 

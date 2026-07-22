@@ -89,7 +89,8 @@
     "compressing": "Сжатие фото…",
     "boxLabels": "QR коробок",
     "labelSize": "Размер этикетки",
-    "lineCode": "Код"
+    "lineCode": "Код",
+    "inBatch": "Партия"
   },
   "cargoStatus": {
     "received_cn": "Принят в Китае",

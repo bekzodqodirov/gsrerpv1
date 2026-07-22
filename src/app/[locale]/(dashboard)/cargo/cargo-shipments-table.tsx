@@ -25,6 +25,8 @@ type Line = {
 
 type CargoFile = { id: string; fileName: string; sizeBytes: number };
 
+type Batch = { batchId: string; code: string; status: string } | null;
+
 type Row = {
   id: string;
   regNumber: string;
@@ -39,6 +41,7 @@ type Row = {
   photoId: string | null;
   files: CargoFile[];
   lines: Line[];
+  batch: Batch;
 };
 
 function FileList({ files }: { files: CargoFile[] }) {
@@ -80,8 +83,8 @@ function LineDetails({ row }: { row: Row }) {
           <thead>
             <tr className="text-left text-[11px] font-semibold tracking-wider text-muted uppercase">
               <th className="px-2 py-1.5">{t("photo")}</th>
-              <th className="px-2 py-1.5">{t("lineCode")}</th>
               <th className="px-2 py-1.5">{t("product")}</th>
+              <th className="px-2 py-1.5">{t("lineCode")}</th>
               <th className="px-2 py-1.5 text-right">{t("boxCount")}</th>
               <th className="px-2 py-1.5">{t("boxDims")}</th>
               <th className="px-2 py-1.5 text-right">{t("weightPerBox")}</th>
@@ -107,6 +110,7 @@ function LineDetails({ row }: { row: Row }) {
                       </span>
                     )}
                   </td>
+                  <td className="px-2 py-1.5 font-medium">{l.productName}</td>
                   <td className="px-2 py-1.5">
                     <span
                       className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-sm font-black whitespace-nowrap text-primary"
@@ -115,7 +119,6 @@ function LineDetails({ row }: { row: Row }) {
                       {row.clientCode}-{l.letterCode}
                     </span>
                   </td>
-                  <td className="px-2 py-1.5 font-medium">{l.productName}</td>
                   <td className="px-2 py-1.5 text-right font-mono tabular-nums">
                     {l.boxCount}
                   </td>
@@ -207,10 +210,14 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
       header: t("client"),
       value: (c) => `${c.clientCode} ${c.clientName}`,
       filter: "text",
+      // Faqat mijoz KODI ko'rsatiladi (firma nomi jadvalni to'ldirmasin);
+      // nom qidiruvda va tooltip'da qoladi.
       cell: (c) => (
-        <span>
-          <span className="font-mono font-semibold">{c.clientCode}</span>
-          <span className="ml-1.5 text-muted">{c.clientName}</span>
+        <span
+          className="font-mono font-semibold"
+          title={c.clientName}
+        >
+          {c.clientCode}
         </span>
       ),
     },
@@ -252,6 +259,25 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
           {ts(c.status as "received_cn")}
         </Badge>
       ),
+    },
+    {
+      id: "batch",
+      header: t("inBatch"),
+      value: (c) => c.batch?.code ?? "",
+      filter: "text",
+      cell: (c) =>
+        c.batch ? (
+          <Link
+            href={`/tms/${c.batch.batchId}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 rounded-md bg-primary-soft px-2 py-0.5 font-mono text-xs font-bold text-primary hover:underline"
+          >
+            {icons.truck("h-3.5 w-3.5")}
+            {c.batch.code}
+          </Link>
+        ) : (
+          <span className="text-muted">—</span>
+        ),
     },
   ];
 

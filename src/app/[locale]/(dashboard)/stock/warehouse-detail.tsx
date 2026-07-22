@@ -341,9 +341,10 @@ export function WarehouseDetail({
             <tr>
               <Th>{L.client}</Th>
               <Th className="text-right">{L.volume}</Th>
-              <Th className="text-right">{L.weight}</Th>
+              {/* Og'irlik va yuklar soni — mobilda yashiriladi (ixcham). */}
+              <Th className="hidden text-right sm:table-cell">{L.weight}</Th>
               <Th className="text-right">{L.boxes}</Th>
-              <Th className="text-right">{L.cargos}</Th>
+              <Th className="hidden text-right sm:table-cell">{L.cargos}</Th>
               <Th className="text-right">{L.age}</Th>
             </tr>
           </thead>
@@ -353,20 +354,20 @@ export function WarehouseDetail({
             ) : (
               shownClients.map((c) => (
                 <TRow key={c.clientId}>
-                  <Td>
-                    <div className="font-mono text-xs font-bold">{c.code}</div>
-                    <div className="text-muted">{c.name}</div>
+                  {/* Faqat mijoz kodi (firma nomi jadvalni to'ldirmasin). */}
+                  <Td className="font-mono text-xs font-bold" title={c.name}>
+                    {c.code}
                   </Td>
                   <Td className="text-right font-mono tabular-nums">
                     {m3(c.totalVolumeM3)}
                   </Td>
-                  <Td className="text-right font-mono tabular-nums">
+                  <Td className="hidden text-right font-mono tabular-nums sm:table-cell">
                     {kg(c.totalWeightKg)}
                   </Td>
                   <Td className="text-right font-mono tabular-nums">
                     {num(c.totalBoxes)}
                   </Td>
-                  <Td className="text-right font-mono tabular-nums">
+                  <Td className="hidden text-right font-mono tabular-nums sm:table-cell">
                     {num(c.cargoCount)}
                   </Td>
                   <Td className="text-right">
@@ -385,12 +386,12 @@ export function WarehouseDetail({
         <TableWrap>
           <thead>
             <tr>
-              <Th>{L.zone}</Th>
+              <Th className="hidden sm:table-cell">{L.zone}</Th>
               <Th>{L.regNumber}</Th>
               <Th>{L.client}</Th>
-              <Th>{L.status}</Th>
-              <Th className="text-right">{L.volume}</Th>
-              <Th className="text-right">{L.weight}</Th>
+              <Th className="hidden sm:table-cell">{L.status}</Th>
+              <Th className="hidden text-right sm:table-cell">{L.volume}</Th>
+              <Th className="hidden text-right sm:table-cell">{L.weight}</Th>
               <Th className="text-right">{L.boxes}</Th>
               <Th className="text-right">{L.age}</Th>
             </tr>
@@ -401,7 +402,7 @@ export function WarehouseDetail({
             ) : (
               shownCargos.map((c) => (
                 <TRow key={c.cargoId}>
-                  <Td>
+                  <Td className="hidden sm:table-cell">
                     {canSetZone ? (
                       <ZoneEditor cargoId={c.cargoId} zone={c.zone} />
                     ) : c.zone ? (
@@ -425,15 +426,15 @@ export function WarehouseDetail({
                       {c.clientCode}
                     </span>
                   </Td>
-                  <Td>
+                  <Td className="hidden sm:table-cell">
                     <Badge className={statusColors[c.status] ?? ""}>
                       {L.statuses[c.status] ?? c.status}
                     </Badge>
                   </Td>
-                  <Td className="text-right font-mono tabular-nums">
+                  <Td className="hidden text-right font-mono tabular-nums sm:table-cell">
                     {m3(c.volumeM3)}
                   </Td>
-                  <Td className="text-right font-mono tabular-nums">
+                  <Td className="hidden text-right font-mono tabular-nums sm:table-cell">
                     {kg(c.weightKg)}
                   </Td>
                   <Td className="text-right font-mono tabular-nums">

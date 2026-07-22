@@ -89,7 +89,8 @@
     "compressing": "正在压缩…",
     "boxLabels": "箱码",
     "labelSize": "标签尺寸",
-    "lineCode": "编号"
+    "lineCode": "编号",
+    "inBatch": "批次"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",
