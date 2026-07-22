@@ -86,7 +86,8 @@
     "noClients": "Mijoz topilmadi",
     "clientRequired": "Mijozni tanlang",
     "sameCodeNote": "Shu tovarning barcha karobkalari shu kodga ega",
-    "compressing": "Rasmlar siqilmoqda…"
+    "compressing": "Rasmlar siqilmoqda…",
+    "boxLabels": "Karobka QR"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",

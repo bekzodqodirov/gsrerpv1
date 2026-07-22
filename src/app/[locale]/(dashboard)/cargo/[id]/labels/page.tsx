@@ -7,15 +7,20 @@ import { PrintButton } from "./print-button";
 
 export default async function CargoLabelsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ line?: string }>;
 }) {
   const { id } = await params;
+  const { line } = await searchParams;
   const t = await getTranslations("cargo");
 
   const data = await getCargo(id);
   if (!data) notFound();
-  const boxes = await getCargoBoxes(id);
+  const allBoxes = await getCargoBoxes(id);
+  // Bitta tovar (qator) tanlangan bo'lsa — faqat o'sha qator karobkalari.
+  const boxes = line ? allBoxes.filter((b) => b.lineId === line) : allBoxes;
 
   // QR kodlarni server tomonda data-URL qilib tayyorlaymiz
   const labels = await Promise.all(
@@ -39,6 +44,11 @@ export default async function CargoLabelsPage({
         <h1 className="text-xl font-bold sm:text-2xl">
           {t("qrLabels")} —{" "}
           <span className="font-mono">{data.cargo.regNumber}</span>{" "}
+          {line && boxes[0] && (
+            <span className="font-mono text-primary">
+              · {data.clientCode}-{boxes[0].letterCode}
+            </span>
+          )}{" "}
           <span className="font-normal text-muted">({boxes.length})</span>
         </h1>
         <PrintButton label={t("print")} />

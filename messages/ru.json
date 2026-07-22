@@ -86,7 +86,8 @@
     "noClients": "Клиенты не найдены",
     "clientRequired": "Выберите клиента",
     "sameCodeNote": "Все коробки этого товара имеют этот же код",
-    "compressing": "Сжатие фото…"
+    "compressing": "Сжатие фото…",
+    "boxLabels": "QR коробок"
   },
   "cargoStatus": {
     "received_cn": "Принят в Китае",

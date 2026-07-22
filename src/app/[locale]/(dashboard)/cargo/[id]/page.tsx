@@ -97,7 +97,7 @@ export default async function CargoDetailPage({
             <Th className="text-right">{t("weightPerBox")}</Th>
             <Th className="text-right">{t("totalWeight")}</Th>
             <Th className="text-right">{t("totalVolume")}</Th>
-            <Th>{t("qrCode")}</Th>
+            <Th>{t("boxLabels")}</Th>
             <Th>{t("linePhotos")}</Th>
           </tr>
         </thead>
@@ -123,8 +123,16 @@ export default async function CargoDetailPage({
               <Td className="text-right font-mono tabular-nums">
                 {l.totalVolumeM3}
               </Td>
-              <Td className="font-mono text-xs whitespace-nowrap text-muted">
-                {qrCode}
+              <Td className="whitespace-nowrap">
+                <Link
+                  href={`/cargo/${cargo.id}/labels?line=${l.id}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 font-mono text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                  title={qrCode}
+                >
+                  {icons.qr("h-3.5 w-3.5")}
+                  {l.boxCount} {icons.printer("h-3 w-3")}
+                </Link>
               </Td>
               <Td>
                 <PhotoThumbs

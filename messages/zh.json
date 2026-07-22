@@ -86,7 +86,8 @@
     "noClients": "未找到客户",
     "clientRequired": "请选择客户",
     "sameCodeNote": "该商品的所有箱子共用此编码",
-    "compressing": "正在压缩…"
+    "compressing": "正在压缩…",
+    "boxLabels": "箱码"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { Badge } from "@/components/ui";
@@ -8,7 +7,6 @@ import { DataTable, type Column, type DataTableLabels } from "@/components/data-
 import { icons } from "@/components/icons";
 import { statusColors } from "@/components/cargo-status";
 import { PhotoThumbs } from "@/components/photo-lightbox";
-import { getLineQrPreviewAction } from "./qr-preview-action";
 
 type Line = {
   id: string;
@@ -42,74 +40,6 @@ type Row = {
   files: CargoFile[];
   lines: Line[];
 };
-
-/** Bitta tovar (qator)ning QR kodini ko'rsatadigan popover — shu tovarning
- * barcha karobkalari bir xil kodga ega bo'lgani uchun bitta rasm yetarli. */
-function LineQrButton({ lineId, code }: { lineId: string; code: string }) {
-  const t = useTranslations("cargo");
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-
-  async function handleOpen() {
-    setOpen(true);
-    if (dataUrl) return;
-    setLoading(true);
-    const result = await getLineQrPreviewAction(lineId);
-    setDataUrl(result?.dataUrl ?? null);
-    setLoading(false);
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          handleOpen();
-        }}
-        className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 font-mono text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-      >
-        {icons.qr("h-3.5 w-3.5")}
-        {code}
-      </button>
-
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          role="dialog"
-          aria-modal
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-xs rounded-xl border border-line bg-surface p-5 text-center shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-mono text-sm font-bold">{code}</h3>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface-2"
-              >
-                {icons.close("h-4 w-4")}
-              </button>
-            </div>
-
-            {loading && <p className="py-10 text-sm text-muted">…</p>}
-            {dataUrl && (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={dataUrl} alt={code} className="mx-auto h-40 w-40" />
-                <p className="mt-2 text-xs text-muted">{t("sameCodeNote")}</p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
 
 function FileList({ files }: { files: CargoFile[] }) {
   const t = useTranslations("cargo");
@@ -156,7 +86,7 @@ function LineDetails({ row }: { row: Row }) {
               <th className="px-2 py-1.5 text-right">{t("weightPerBox")}</th>
               <th className="px-2 py-1.5 text-right">{t("totalWeight")}</th>
               <th className="px-2 py-1.5 text-right">{t("totalVolume")}</th>
-              <th className="px-2 py-1.5">{t("qrCode")}</th>
+              <th className="px-2 py-1.5">{t("boxLabels")}</th>
             </tr>
           </thead>
           <tbody>
@@ -195,7 +125,16 @@ function LineDetails({ row }: { row: Row }) {
                     {l.totalVolumeM3}
                   </td>
                   <td className="px-2 py-1.5">
-                    <LineQrButton lineId={l.id} code={code} />
+                    <Link
+                      href={`/cargo/${row.id}/labels?line=${l.id}`}
+                      target="_blank"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 font-mono text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                      title={code}
+                    >
+                      {icons.qr("h-3.5 w-3.5")}
+                      {l.boxCount} {icons.printer("h-3 w-3")}
+                    </Link>
                   </td>
                 </tr>
               );
