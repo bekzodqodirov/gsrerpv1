@@ -15,6 +15,10 @@ import {
   TRow,
 } from "@/components/ui";
 import { icons } from "@/components/icons";
+import { PhotoThumbs } from "@/components/photo-lightbox";
+import { RESTING_STATUSES } from "@/modules/stock/dto";
+import { ReturnCargo } from "./return-cargo";
+import { DeleteReturned } from "./delete-returned";
 
 export default async function CargoDetailPage({
   params,
@@ -34,6 +38,13 @@ export default async function CargoDetailPage({
   const canEdit =
     (session?.perms.includes("*") || session?.perms.includes("cargo.receive")) &&
     cargo.status === "received_cn";
+  // Qaytarish: omborda jismonan turgan yukni cargo.move huquqi bilan.
+  const canMove =
+    session?.perms.includes("*") || session?.perms.includes("cargo.move");
+  const canReturn =
+    canMove && (RESTING_STATUSES as readonly string[]).includes(cargo.status);
+  // Qaytarilgan yukni butunlay o'chirish (saqlangan joydan).
+  const canDeleteReturned = canMove && cargo.status === "returned";
 
   const [cargoFiles, ...lineFiles] = await Promise.all([
     listAttachments("cargo", cargo.id),
@@ -60,7 +71,9 @@ export default async function CargoDetailPage({
             {cargo.receivedAt.toISOString().slice(0, 10)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canReturn && <ReturnCargo cargoId={cargo.id} />}
+          {canDeleteReturned && <DeleteReturned cargoId={cargo.id} />}
           {canEdit && (
             <Link
               href={`/cargo/${cargo.id}/edit`}
@@ -91,12 +104,13 @@ export default async function CargoDetailPage({
           <tr>
             <Th>#</Th>
             <Th>{t("product")}</Th>
+            <Th>{t("lineCode")}</Th>
             <Th className="text-right">{t("boxCount")}</Th>
             <Th>{t("boxDims")}</Th>
             <Th className="text-right">{t("weightPerBox")}</Th>
             <Th className="text-right">{t("totalWeight")}</Th>
             <Th className="text-right">{t("totalVolume")}</Th>
-            <Th>{t("qrCode")}</Th>
+            <Th>{t("boxLabels")}</Th>
             <Th>{t("linePhotos")}</Th>
           </tr>
         </thead>
@@ -107,6 +121,11 @@ export default async function CargoDetailPage({
             <TRow key={l.id}>
               <Td className="text-muted">{l.lineNo}</Td>
               <Td className="font-medium">{l.productName}</Td>
+              <Td>
+                <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-sm font-black text-primary">
+                  {clientCode}-{l.letterCode}
+                </span>
+              </Td>
               <Td className="text-right font-mono tabular-nums">{l.boxCount}</Td>
               <Td className="font-mono text-muted tabular-nums">
                 {l.boxLengthCm
@@ -122,30 +141,23 @@ export default async function CargoDetailPage({
               <Td className="text-right font-mono tabular-nums">
                 {l.totalVolumeM3}
               </Td>
-              <Td className="font-mono text-xs whitespace-nowrap text-muted">
-                {qrCode}
+              <Td className="whitespace-nowrap">
+                <Link
+                  href={`/cargo/${cargo.id}/labels?line=${l.id}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 font-mono text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                  title={qrCode}
+                >
+                  {icons.qr("h-3.5 w-3.5")}
+                  {l.boxCount} {icons.printer("h-3 w-3")}
+                </Link>
               </Td>
               <Td>
-                <div className="flex flex-wrap gap-1.5">
-                  {lineFiles[i]?.map((f) => (
-                    <a
-                      key={f.id}
-                      href={`/api/files/${f.id}`}
-                      target="_blank"
-                      className="block h-11 w-11 overflow-hidden rounded-lg border border-line transition-transform hover:scale-105"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/files/${f.id}`}
-                        alt={f.fileName}
-                        className="h-full w-full object-cover"
-                      />
-                    </a>
-                  ))}
-                  {(!lineFiles[i] || lineFiles[i].length === 0) && (
-                    <span className="text-muted">—</span>
-                  )}
-                </div>
+                <PhotoThumbs
+                  photos={(lineFiles[i] ?? [])
+                    .filter((f) => f.mimeType.startsWith("image/"))
+                    .map((f) => ({ id: f.id, name: f.fileName }))}
+                />
               </Td>
             </TRow>
             );

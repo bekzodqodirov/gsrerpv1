@@ -14,11 +14,13 @@ import {
   warehouses,
   currencies,
   docSequences,
+  carriers,
 } from "./schema";
 
 const ROLES = [
   { code: "admin", name: "Administrator" },
   { code: "omborchi", name: "Omborchi" },
+  { code: "logist", name: "Logist" },
   { code: "sotuvchi", name: "Sotuvchi" },
   { code: "buxgalter", name: "Buxgalter" },
   { code: "hr", name: "HR menejer" },
@@ -31,22 +33,29 @@ const PERMISSIONS = [
   { code: "*", description: "Barcha huquqlar" },
   { code: "settings.users.manage", description: "Foydalanuvchilarni boshqarish" },
   { code: "settings.roles.manage", description: "Rollarni boshqarish" },
+  { code: "settings.warehouses.manage", description: "Ombor va sig'imni boshqarish" },
   { code: "clients.view", description: "Mijozlarni ko'rish" },
   { code: "clients.manage", description: "Mijozlarni boshqarish" },
   { code: "cargo.view", description: "Yuklarni ko'rish" },
   { code: "cargo.receive", description: "Yuk qabul qilish" },
   { code: "cargo.move", description: "Yuk holatini o'zgartirish" },
+  { code: "tms.view", description: "Partiya/mashinalarni ko'rish" },
+  { code: "tms.manage", description: "Partiya/mashina va narxlarni boshqarish" },
+  { code: "tms.load", description: "Mashinaga yuklash/tushirishni tasdiqlash" },
+  { code: "finance.view", description: "Moliyani ko'rish" },
+  { code: "finance.manage", description: "Tarif/invoys/to'lov/xarajatlarni boshqarish" },
 ] as const;
 
 // Skladlar: 4 Xitoy (arenda) + 2 O'zbekiston customs warehouse (namuna)
-// gsCode — QR/karobka yorlig'ida ishlatiladigan qisqa kod.
+// gsCode — QR/karobka yorlig'ida (stikerda) ishlatiladigan qisqa kod:
+// Yiwu=YW, Guangzhou=GZ, Urumchi=URM, Qashqar=KSH (UZ: Toshkent=TSH, Andijon=ADN).
 const WAREHOUSES = [
-  { code: "YIWU", gsCode: "GS1", name: "Yiwu skladi", country: "CN", city: "Yiwu", kind: "receiving" },
-  { code: "GZ", gsCode: "GS2", name: "Guangzhou skladi", country: "CN", city: "Guangzhou", kind: "receiving" },
-  { code: "URC", gsCode: "GS3", name: "Urumchi skladi", country: "CN", city: "Urumqi", kind: "receiving" },
-  { code: "KSG", gsCode: "GS4", name: "Qashqar skladi", country: "CN", city: "Kashgar", kind: "consolidation" },
-  { code: "TAS", gsCode: "GS5", name: "Toshkent customs warehouse", country: "UZ", city: "Toshkent", kind: "customs" },
-  { code: "AND", gsCode: "GS6", name: "Andijon customs warehouse", country: "UZ", city: "Andijon", kind: "customs" },
+  { code: "YIWU", gsCode: "YW", name: "Yiwu skladi", country: "CN", city: "Yiwu", kind: "receiving", capacityM3: "500", capacityKg: "120000" },
+  { code: "GZ", gsCode: "GZ", name: "Guangzhou skladi", country: "CN", city: "Guangzhou", kind: "receiving", capacityM3: "400", capacityKg: "100000" },
+  { code: "URC", gsCode: "URM", name: "Urumchi skladi", country: "CN", city: "Urumqi", kind: "receiving", capacityM3: "300", capacityKg: "80000" },
+  { code: "KSG", gsCode: "KSH", name: "Qashqar skladi", country: "CN", city: "Kashgar", kind: "consolidation", capacityM3: "1500", capacityKg: "400000" },
+  { code: "TAS", gsCode: "TSH", name: "Toshkent customs warehouse", country: "UZ", city: "Toshkent", kind: "customs", capacityM3: "400", capacityKg: "90000" },
+  { code: "AND", gsCode: "ADN", name: "Andijon customs warehouse", country: "UZ", city: "Andijon", kind: "customs", capacityM3: "300", capacityKg: "70000" },
 ] as const;
 
 const CURRENCIES = [
@@ -58,7 +67,9 @@ const CURRENCIES = [
 // Hujjat raqamlagichlar
 const SEQUENCES = [
   { docType: "client", prefix: "GSR" }, // mijoz kodi: GSR-0001
-  { docType: "cargo", prefix: "YK" }, //   yuk partiyasi: YK-2026-00001
+  { docType: "cargo", prefix: "YK" }, //   yuk: YK-2026-00001
+  { docType: "invoice", prefix: "INV" }, // invoys: INV-2026-00001
+  { docType: "pallet", prefix: "PLT" }, // tahta yashik: PLT-2026-0001
 ] as const;
 
 const ADMIN = {
@@ -121,19 +132,48 @@ async function main() {
     .values({ userId: admin.id, roleId: adminRole.id })
     .onConflictDoNothing();
 
-  // Omborchi roli: yuk qabul/ko'rish/harakat + mijozlarni ko'rish
-  const omborchiRole = (await db.query.roles.findFirst({
-    where: eq(roles.code, "omborchi"),
-  }))!;
-  for (const permCode of ["cargo.view", "cargo.receive", "cargo.move", "clients.view"]) {
-    const perm = await db.query.permissions.findFirst({
-      where: eq(permissions.code, permCode),
-    });
-    if (perm) {
-      await db
-        .insert(rolePermissions)
-        .values({ roleId: omborchiRole.id, permissionId: perm.id })
-        .onConflictDoNothing();
+  // Rol → huquqlar biriktirish (admin "*" orqali hammasini oladi).
+  const roleGrants: Record<string, string[]> = {
+    // Sklad xodimi: yuk qabul + mashinaga yuklash/tushirish (narxni KO'RMAYDI)
+    omborchi: [
+      "cargo.view",
+      "cargo.receive",
+      "cargo.move",
+      "clients.view",
+      "tms.view",
+      "tms.load",
+    ],
+    // Logist: barcha ombor qoldig'i, partiya/mashina va narxlarni boshqaradi
+    logist: [
+      "cargo.view",
+      "cargo.move",
+      "clients.view",
+      "tms.view",
+      "tms.manage",
+      "tms.load",
+    ],
+    // Buxgalter: barcha moliya + ko'rish uchun mijoz/yuk/partiya
+    buxgalter: [
+      "clients.view",
+      "cargo.view",
+      "tms.view",
+      "finance.view",
+      "finance.manage",
+    ],
+  };
+  for (const [roleCode, perms] of Object.entries(roleGrants)) {
+    const role = await db.query.roles.findFirst({ where: eq(roles.code, roleCode) });
+    if (!role) continue;
+    for (const permCode of perms) {
+      const perm = await db.query.permissions.findFirst({
+        where: eq(permissions.code, permCode),
+      });
+      if (perm) {
+        await db
+          .insert(rolePermissions)
+          .values({ roleId: role.id, permissionId: perm.id })
+          .onConflictDoNothing();
+      }
     }
   }
 
@@ -157,6 +197,22 @@ async function main() {
   // Raqamlagichlar
   for (const s of SEQUENCES) {
     await db.insert(docSequences).values(s).onConflictDoNothing();
+  }
+
+  // Namuna yollanma mashinalar (bozordan yollanadigan)
+  const CARRIERS = [
+    { name: "Chen Wei", phone: "+86 138 0011 2233", truckPlate: "浙G·88888", truckType: "Tent 40t", capacityKg: "28000", capacityM3: "82" },
+    { name: "Aziz Karimov", phone: "+998 90 123 45 67", truckPlate: "01 A 777 BC", truckType: "Refrijerator", capacityKg: "20000", capacityM3: "60" },
+    { name: "Li Ming Logistics", phone: "+86 139 5566 7788", truckPlate: "新A·66666", truckType: "Tent 20t", capacityKg: "15000", capacityM3: "45" },
+  ];
+  for (const c of CARRIERS) {
+    const exists = await db.query.carriers.findFirst({
+      where: eq(carriers.name, c.name),
+    });
+    if (!exists) {
+      await db.insert(carriers).values(c);
+      console.log(`+ mashina: ${c.name}`);
+    }
   }
 
   console.log("Seed tugadi.");

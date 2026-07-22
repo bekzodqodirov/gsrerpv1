@@ -43,3 +43,5 @@ next-env.d.ts
 
 # yuklangan fayllar
 /uploads
+
+certificates

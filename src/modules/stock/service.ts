@@ -1,0 +1,437 @@
+// Ombor qoldig'i servisi.
+//
+// Logist "qachon mashina yollash kerak?" degan qarorni shu ekrandan oladi:
+// har ombordagi jami kg/m³, mijozlar soni va eng eski yukning yoshi.
+// Sklad xodimi (session.warehouseId) faqat o'z omborini ko'radi.
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { db } from "@/db";
+import { cargos, cargoBoxes, cargoLines, clients, warehouses } from "@/db/schema";
+import { requirePermission } from "@/modules/shared/auth";
+import {
+  RESTING_STATUSES,
+  ageBucket,
+  daysSince,
+  emptyBuckets,
+  type Buckets,
+} from "./dto";
+
+export type WarehouseStock = {
+  id: string;
+  code: string;
+  gsCode: string;
+  name: string;
+  country: string;
+  city: string | null;
+  kind: string;
+  cargoCount: number;
+  clientCount: number;
+  totalBoxes: number;
+  totalWeightKg: number;
+  totalVolumeM3: number;
+  oldestDays: number;
+  buckets: Buckets;
+  capacityM3: number | null;
+  capacityKg: number | null;
+};
+
+export type StockTotals = {
+  cargoCount: number;
+  clientCount: number;
+  totalBoxes: number;
+  totalWeightKg: number;
+  totalVolumeM3: number;
+};
+
+/** Barcha omborlar bo'yicha qoldiq xulasasi (bo'sh omborlar ham ko'rinadi). */
+export async function getStockOverview(): Promise<{
+  warehouses: WarehouseStock[];
+  totals: StockTotals;
+}> {
+  const session = await requirePermission("cargo.view");
+  const now = Date.now();
+
+  // Ko'rish doirasidagi omborlar (sklad xodimiga faqat o'ziniki):
+  const whConds = [eq(warehouses.isActive, true)];
+  if (session.warehouseId) whConds.push(eq(warehouses.id, session.warehouseId));
+  const whs = await db.query.warehouses.findMany({
+    where: and(...whConds),
+    orderBy: [asc(warehouses.country), asc(warehouses.gsCode)],
+  });
+
+  // Omborda yotgan yuklar:
+  const cargoConds = [
+    eq(cargos.voided, false),
+    inArray(cargos.status, [...RESTING_STATUSES]),
+    isNotNull(cargos.currentWarehouseId),
+  ];
+  if (session.warehouseId) {
+    cargoConds.push(eq(cargos.currentWarehouseId, session.warehouseId));
+  }
+  const rows = await db
+    .select({
+      warehouseId: cargos.currentWarehouseId,
+      clientId: cargos.clientId,
+      boxes: cargos.totalBoxes,
+      kg: cargos.totalWeightKg,
+      m3: cargos.totalVolumeM3,
+      receivedAt: cargos.receivedAt,
+    })
+    .from(cargos)
+    .where(and(...cargoConds));
+
+  type Acc = {
+    boxes: number;
+    kg: number;
+    m3: number;
+    cargoCount: number;
+    clients: Set<string>;
+    oldestDays: number;
+    buckets: Buckets;
+  };
+  const byWarehouse = new Map<string, Acc>();
+  const allClients = new Set<string>();
+  let totalBoxes = 0;
+  let totalKg = 0;
+  let totalM3 = 0;
+
+  for (const r of rows) {
+    const wid = r.warehouseId!;
+    const acc =
+      byWarehouse.get(wid) ??
+      ({
+        boxes: 0,
+        kg: 0,
+        m3: 0,
+        cargoCount: 0,
+        clients: new Set<string>(),
+        oldestDays: 0,
+        buckets: emptyBuckets(),
+      } satisfies Acc);
+    const kg = Number(r.kg);
+    const m3 = Number(r.m3);
+    const days = daysSince(r.receivedAt, now);
+    acc.boxes += r.boxes;
+    acc.kg += kg;
+    acc.m3 += m3;
+    acc.cargoCount += 1;
+    acc.clients.add(r.clientId);
+    acc.oldestDays = Math.max(acc.oldestDays, days);
+    acc.buckets[ageBucket(days)] += 1;
+    byWarehouse.set(wid, acc);
+
+    allClients.add(r.clientId);
+    totalBoxes += r.boxes;
+    totalKg += kg;
+    totalM3 += m3;
+  }
+
+  const warehousesOut: WarehouseStock[] = whs.map((w) => {
+    const a = byWarehouse.get(w.id);
+    return {
+      id: w.id,
+      code: w.code,
+      gsCode: w.gsCode,
+      name: w.name,
+      country: w.country,
+      city: w.city,
+      kind: w.kind,
+      cargoCount: a?.cargoCount ?? 0,
+      clientCount: a ? a.clients.size : 0,
+      totalBoxes: a?.boxes ?? 0,
+      totalWeightKg: round3(a?.kg ?? 0),
+      totalVolumeM3: round4(a?.m3 ?? 0),
+      oldestDays: a?.oldestDays ?? 0,
+      buckets: a?.buckets ?? emptyBuckets(),
+      capacityM3: w.capacityM3 != null ? Number(w.capacityM3) : null,
+      capacityKg: w.capacityKg != null ? Number(w.capacityKg) : null,
+    };
+  });
+
+  return {
+    warehouses: warehousesOut,
+    totals: {
+      cargoCount: rows.length,
+      clientCount: allClients.size,
+      totalBoxes,
+      totalWeightKg: round3(totalKg),
+      totalVolumeM3: round4(totalM3),
+    },
+  };
+}
+
+export type ClientStock = {
+  clientId: string;
+  code: string;
+  name: string;
+  cargoCount: number;
+  totalBoxes: number;
+  totalWeightKg: number;
+  totalVolumeM3: number;
+  oldestDays: number;
+};
+
+export type CargoStockRow = {
+  cargoId: string;
+  regNumber: string;
+  status: string;
+  clientCode: string;
+  clientName: string;
+  boxes: number;
+  weightKg: number;
+  volumeM3: number;
+  receivedAt: Date;
+  days: number;
+  zone: string | null;
+};
+
+/** Bitta ombor tafsiloti: mijozlar kesimida + yuklar ro'yxati (FIFO). */
+export async function getWarehouseStock(warehouseId: string): Promise<{
+  warehouse: typeof warehouses.$inferSelect;
+  clients: ClientStock[];
+  cargos: CargoStockRow[];
+  totals: StockTotals;
+} | null> {
+  const session = await requirePermission("cargo.view");
+  // Sklad xodimi begona omborni ko'ra olmaydi — "topilmadi" kabi (null),
+  // shunda sahifa umumiy ko'rinishga qaytadi (500 emas).
+  if (session.warehouseId && session.warehouseId !== warehouseId) {
+    return null;
+  }
+
+  const wh = await db.query.warehouses.findFirst({
+    where: eq(warehouses.id, warehouseId),
+  });
+  if (!wh) return null;
+
+  const now = Date.now();
+  const rows = await db
+    .select({
+      cargoId: cargos.id,
+      regNumber: cargos.regNumber,
+      status: cargos.status,
+      boxes: cargos.totalBoxes,
+      kg: cargos.totalWeightKg,
+      m3: cargos.totalVolumeM3,
+      zone: cargos.storageZone,
+      receivedAt: cargos.receivedAt,
+      clientId: clients.id,
+      clientCode: clients.code,
+      clientName: clients.name,
+    })
+    .from(cargos)
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .where(
+      and(
+        eq(cargos.voided, false),
+        inArray(cargos.status, [...RESTING_STATUSES]),
+        eq(cargos.currentWarehouseId, warehouseId),
+      ),
+    )
+    // Eng eski birinchi — mashina yuklashda FIFO tavsiyasi shu tartibda.
+    .orderBy(asc(cargos.receivedAt));
+
+  const cargoRows: CargoStockRow[] = rows.map((r) => ({
+    cargoId: r.cargoId,
+    regNumber: r.regNumber,
+    status: r.status,
+    clientCode: r.clientCode,
+    clientName: r.clientName,
+    boxes: r.boxes,
+    weightKg: Number(r.kg),
+    volumeM3: Number(r.m3),
+    receivedAt: r.receivedAt,
+    days: daysSince(r.receivedAt, now),
+    zone: r.zone,
+  }));
+
+  const byClient = new Map<string, ClientStock>();
+  let totalBoxes = 0;
+  let totalKg = 0;
+  let totalM3 = 0;
+  for (const r of cargoRows) {
+    const c =
+      byClient.get(r.clientCode) ??
+      ({
+        clientId: rows.find((x) => x.clientCode === r.clientCode)!.clientId,
+        code: r.clientCode,
+        name: r.clientName,
+        cargoCount: 0,
+        totalBoxes: 0,
+        totalWeightKg: 0,
+        totalVolumeM3: 0,
+        oldestDays: 0,
+      } satisfies ClientStock);
+    c.cargoCount += 1;
+    c.totalBoxes += r.boxes;
+    c.totalWeightKg += r.weightKg;
+    c.totalVolumeM3 += r.volumeM3;
+    c.oldestDays = Math.max(c.oldestDays, r.days);
+    byClient.set(r.clientCode, c);
+
+    totalBoxes += r.boxes;
+    totalKg += r.weightKg;
+    totalM3 += r.volumeM3;
+  }
+
+  const clientsOut = [...byClient.values()]
+    .map((c) => ({
+      ...c,
+      totalWeightKg: round3(c.totalWeightKg),
+      totalVolumeM3: round4(c.totalVolumeM3),
+    }))
+    // Eng ko'p yotib qolgan mijoz tepada.
+    .sort((a, b) => b.oldestDays - a.oldestDays);
+
+  return {
+    warehouse: wh,
+    clients: clientsOut,
+    cargos: cargoRows,
+    totals: {
+      cargoCount: cargoRows.length,
+      clientCount: byClient.size,
+      totalBoxes,
+      totalWeightKg: round3(totalKg),
+      totalVolumeM3: round4(totalM3),
+    },
+  };
+}
+
+export type WarehouseBox = {
+  qrCode: string;
+  boxNo: number;
+  cargoId: string;
+  regNumber: string;
+  clientCode: string;
+  clientName: string;
+  letterCode: string;
+  productName: string;
+  days: number;
+  flag: string | null;
+  zone: string | null;
+};
+
+/**
+ * Omborda jismonan yotgan BARCHA karobkalar (har biri alohida QR bilan).
+ * Karobka joyi = uning yukining joriy ombori (yuk "yotgan" holatda bo'lsa).
+ * Bu ham karobka darajasidagi ko'rinish, ham inventarizatsiya (scan) uchun
+ * kutilgan ro'yxat.
+ */
+export async function getWarehouseBoxes(
+  warehouseId: string,
+): Promise<{ warehouse: typeof warehouses.$inferSelect; boxes: WarehouseBox[] } | null> {
+  const session = await requirePermission("cargo.view");
+  if (session.warehouseId && session.warehouseId !== warehouseId) return null;
+
+  const wh = await db.query.warehouses.findFirst({
+    where: eq(warehouses.id, warehouseId),
+  });
+  if (!wh) return null;
+
+  const now = Date.now();
+  const rows = await db
+    .select({
+      qrCode: cargoBoxes.qrCode,
+      boxNo: cargoBoxes.boxNo,
+      flag: cargoBoxes.flag,
+      cargoId: cargos.id,
+      regNumber: cargos.regNumber,
+      zone: cargos.storageZone,
+      receivedAt: cargos.receivedAt,
+      clientCode: clients.code,
+      clientName: clients.name,
+      letterCode: cargoLines.letterCode,
+      productName: cargoLines.productName,
+    })
+    .from(cargoBoxes)
+    .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
+    .innerJoin(clients, eq(cargos.clientId, clients.id))
+    .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
+    .where(
+      and(
+        eq(cargos.voided, false),
+        inArray(cargos.status, [...RESTING_STATUSES]),
+        eq(cargos.currentWarehouseId, warehouseId),
+      ),
+    )
+    .orderBy(asc(clients.code), asc(cargoLines.letterCode), asc(cargoBoxes.boxNo));
+
+  const boxes: WarehouseBox[] = rows.map((r) => ({
+    qrCode: r.qrCode,
+    boxNo: r.boxNo,
+    cargoId: r.cargoId,
+    regNumber: r.regNumber,
+    clientCode: r.clientCode,
+    clientName: r.clientName,
+    letterCode: r.letterCode,
+    productName: r.productName,
+    days: daysSince(r.receivedAt, now),
+    flag: r.flag,
+    zone: r.zone,
+  }));
+
+  return { warehouse: wh, boxes };
+}
+
+/**
+ * Prixodning sklad ichidagi zonasini o'rnatish (A, B, 1-qator...).
+ * Sklad xodimi faqat o'z skladidagi yukka zona qo'ya oladi.
+ */
+export async function setCargoZone(cargoId: string, zone: string) {
+  const session = await requirePermission("cargo.move");
+  const cargo = await db.query.cargos.findFirst({
+    where: eq(cargos.id, cargoId),
+    columns: { id: true, currentWarehouseId: true },
+  });
+  if (!cargo) throw new Error("NOT_FOUND");
+  if (
+    session.warehouseId &&
+    cargo.currentWarehouseId !== session.warehouseId
+  ) {
+    throw new Error("NOT_FOUND");
+  }
+  const clean = zone.trim().slice(0, 32);
+  await db
+    .update(cargos)
+    .set({ storageZone: clean || null, updatedAt: new Date() })
+    .where(eq(cargos.id, cargoId));
+}
+
+/** Sozlamalar uchun: barcha omborlar (sig'im tahriri). */
+export async function listWarehousesForSettings() {
+  await requirePermission("settings.warehouses.manage");
+  return db.query.warehouses.findMany({
+    orderBy: [asc(warehouses.country), asc(warehouses.gsCode)],
+    columns: {
+      id: true,
+      gsCode: true,
+      name: true,
+      country: true,
+      kind: true,
+      capacityM3: true,
+      capacityKg: true,
+      isActive: true,
+    },
+  });
+}
+
+/** Ombor sig'imini yangilash (null = belgilanmagan). */
+export async function updateWarehouseCapacity(
+  warehouseId: string,
+  capacityM3: number | null,
+  capacityKg: number | null,
+) {
+  await requirePermission("settings.warehouses.manage");
+  const clean = (n: number | null) =>
+    n != null && Number.isFinite(n) && n > 0 ? String(n) : null;
+  await db
+    .update(warehouses)
+    .set({ capacityM3: clean(capacityM3), capacityKg: clean(capacityKg) })
+    .where(eq(warehouses.id, warehouseId));
+}
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
+}

@@ -26,6 +26,11 @@ export const clients = pgTable("client", {
   // Qarzga ruxsat: null = qarz mumkin emas, qiymat = limit (USD).
   // Qarzdor mijoz yuki tarqatishda ushlab turiladi (service tekshiradi).
   creditLimitUsd: numeric("credit_limit_usd", { precision: 18, scale: 2 }),
+  // Harf-kod hisoblagichi: mijozning tovar guruhlari A, B, C ... tarzida
+  // KETMA-KET yuritiladi. Har yangi prixod oldingi harfdan davom etadi
+  // (boshidan A ga qaytmaydi). Bu yerda mijozga berilgan harflar SONI saqlanadi
+  // — keyingi harf shu qiymatdan boshlanadi (letterCodeForIndex bilan matnga).
+  lastLetterSeq: integer("last_letter_seq").notNull().default(0),
   note: text("note"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -53,6 +58,10 @@ export const warehouses = pgTable("warehouse", {
   // consolidation — Qashqar: jamlash va xalqaro jo'natish nuqtasi
   // customs    — O'zbekistondagi bojxona ombori
   kind: varchar("kind", { length: 16 }).notNull(),
+  // Sig'im (bandlik % va "mashina yollash vaqti" ogohlantirishi uchun).
+  // null = belgilanmagan (u holda bandlik ko'rsatilmaydi).
+  capacityM3: numeric("capacity_m3", { precision: 12, scale: 2 }),
+  capacityKg: numeric("capacity_kg", { precision: 14, scale: 2 }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

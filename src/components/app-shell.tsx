@@ -29,10 +29,12 @@ export function AppShell({
   const locale = useLocale();
   const [open, setOpen] = useState(false);
 
-  // Sahifa almashganda mobil menyuni yopamiz
+  // Sahifa almashganda (tashqi navigatsiya hodisasi) mobil menyuni yopamiz.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -110,8 +112,15 @@ export function AppShell({
       {/* Mobil topbar */}
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 lg:hidden print:hidden">
         <button
+          type="button"
           onClick={() => setOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2"
+          // touch-manipulation: mobil brauzerlar (ayniqsa Chrome/Android) sahifa
+          // TEPASIDAGI elementlarda tortib-yangilash (pull-to-refresh) yoki
+          // qo'sh-teginish kattalashtirishni aniqlash uchun tegishni biroz
+          // KECHIKTIRISHI/yutib yuborishi mumkin — shu sabab bosh menyu tugmasi
+          // ba'zan javob bermaydi. Bu klass brauzerga darrov "oddiy tap" deb
+          // hisoblashni buyuradi.
+          className="flex h-9 w-9 touch-manipulation items-center justify-center rounded-lg text-muted hover:bg-surface-2"
           aria-label="Menu"
         >
           {icons.menu()}
@@ -138,8 +147,9 @@ export function AppShell({
                 <span className="font-bold">{appName}</span>
               </span>
               <button
+                type="button"
                 onClick={() => setOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2"
+                className="flex h-9 w-9 touch-manipulation items-center justify-center rounded-lg text-muted hover:bg-surface-2"
                 aria-label="Close"
               >
                 {icons.close()}
@@ -152,8 +162,8 @@ export function AppShell({
       )}
 
       {/* Kontent */}
-      <div className="min-w-0 flex-1 lg:pl-60">
-        <main className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="min-w-0 flex-1 lg:pl-60 print:pl-0">
+        <main className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8 print:max-w-none print:p-0">
           {children}
         </main>
       </div>

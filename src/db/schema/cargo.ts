@@ -16,14 +16,26 @@ import {
   timestamp,
   numeric,
   integer,
+  bigint,
   jsonb,
   boolean,
   pgEnum,
   index,
   unique,
+  customType,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { clients, warehouses } from "./catalog";
 import { users } from "./system";
+
+// Postgres bytea — fayl baytlarini to'g'ridan-to'g'ri bazada saqlash uchun.
+// Diskka bog'liqlikni yo'qotadi (ephemeral serverlarda ham fayllar yo'qolmaydi).
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // Yuk holatlari — jarayon bosqichlari:
 export const cargoStatusEnum = pgEnum("cargo_status", [
@@ -39,6 +51,7 @@ export const cargoStatusEnum = pgEnum("cargo_status", [
   "delivered", //       10. Mijozga topshirildi
   "held", //             ⚠ Ushlab turilgan (qarz, bojxona muammosi...)
   "lost", //             ⚠ Yo'qolgan (to'liq)
+  "returned", //         ⚠ Qaytarildi (ombordan chiqarildi — qoldiqqa kirmaydi)
 ]);
 
 // ─── Prixod (yuk qabul hujjati) ──────────────────────────────────────────────
@@ -76,6 +89,11 @@ export const cargos = pgTable(
     status: cargoStatusEnum("status").notNull().default("received_cn"),
     heldFromStatus: varchar("held_from_status", { length: 32 }),
 
+    // Sklad ichidagi joyi (zona/qator: A, B, 1-qator...) — yuklashda topish uchun.
+    storageZone: varchar("storage_zone", { length: 32 }),
+    // Qoldiq prixod: mashinaga sig'may bo'lingan bo'lsa — asl prixodga ishora.
+    splitFrom: uuid("split_from").references((): AnyPgColumn => cargos.id),
+
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 
@@ -108,9 +126,13 @@ export const cargoLines = pgTable(
       .notNull()
       .references(() => cargos.id),
     lineNo: integer("line_no").notNull(), // 1, 2, 3...
-    // Shu tovar turining prixod ichidagi harf kodi: A, B, ... Z, AA, ... ZZ,
-    // so'ng yana A ga qaytadi. Bir xil tovarning BARCHA karobkalari shu bir
-    // xil harfni oladi (masalan 50 ta "oyinchoq" karobkasi — hammasi "A").
+    // Mijoz bo'yicha UZLUKSIZ harf ketma-ketligidagi absolyut tartib (0-based):
+    // client.lastLetterSeq dan ajratiladi. Shu son letterCodeForIndex orqali
+    // harfga aylanadi (0→A, 1→B, ... 26→AA). Yangi prixod oldingi harfdan
+    // davom etadi — boshidan A ga qaytmaydi.
+    letterSeq: integer("letter_seq").notNull().default(0),
+    // Yuqoridagi tartibdan hisoblangan harf-kod matni (A, B, ... AA): inson
+    // o'qishi va yorliqlar uchun. letterSeq bilan sinxron saqlanadi.
     letterCode: varchar("letter_code", { length: 4 }).notNull(),
     productName: varchar("product_name", { length: 255 }).notNull(),
 
@@ -144,12 +166,19 @@ export const cargoLines = pgTable(
 
 export const pallets = pgTable("pallet", {
   id: uuid("id").primaryKey().defaultRandom(),
-  code: varchar("code", { length: 64 }).notNull().unique(), // PLT-2026-0001
+  code: varchar("code", { length: 64 }).notNull().unique(), // PLT-2026-0001 (yashik QR'i)
   warehouseId: uuid("warehouse_id")
     .notNull()
     .references(() => warehouses.id),
+  // Bitta yashik = bitta mijoz (qaror). Ichidagi karobkalar shu mijozniki.
+  clientId: uuid("client_id")
+    .notNull()
+    .references(() => clients.id),
+  // open — hali to'ldirilmoqda; closed — yopilgan (yuklashga tayyor).
+  status: varchar("status", { length: 16 }).notNull().default("open"),
   note: text("note"),
   createdBy: uuid("created_by").references(() => users.id),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -168,11 +197,16 @@ export const cargoBoxes = pgTable(
       .notNull()
       .references(() => cargoLines.id),
     boxNo: integer("box_no").notNull(), // prixod ichida 1..N (ketma-ket, chiziqlar bo'yicha)
-    // Yorliq/QR matni: GS1-GSR0002-A — o'z qatoridagi BARCHA karobkalar bilan
-    // bir xil (harf tovar darajasida beriladi). Global unique EMAS — haqiqiy
-    // unique kalit id. Karobkaning "nechinchi"ligi shu qatordagi tartibi
-    // (boxNo'dan hisoblanadi), alohida ustun sifatida saqlanmaydi.
+    // Har karobkaning UNIKAL QR matni: YK-2026-00006-B037 (reg-raqam + karobka
+    // tartib raqami). Global unique — scan qilinganda aynan bitta karobkaga
+    // ishora qiladi (yuklash/tushirishda har karobka alohida scan qilinadi).
     qrCode: varchar("qr_code", { length: 64 }).notNull(),
+    // QISQA raqamli global ID — RFID (EPC) ga mos, tez scan/qidiruv uchun.
+    // Ketma-ket (100000 dan) beriladi; skaner MATN kodini ham, shu raqamni ham
+    // qabul qiladi (kelajakda RFID tag'ga shu raqam yoziladi).
+    boxUid: bigint("box_uid", { mode: "number" })
+      .notNull()
+      .default(sql`nextval('box_uid_seq')`),
     // Qayta upakovkada paddonga biriktiriladi:
     palletId: uuid("pallet_id").references(() => pallets.id),
     // damaged | missing kabi belgi (istisno holatlar):
@@ -181,7 +215,8 @@ export const cargoBoxes = pgTable(
   (t) => [
     index("cargo_box_cargo_idx").on(t.cargoId),
     index("cargo_box_pallet_idx").on(t.palletId),
-    index("cargo_box_qr_idx").on(t.qrCode),
+    unique("cargo_box_qr_uq").on(t.qrCode),
+    unique("cargo_box_uid_uq").on(t.boxUid),
     unique("cargo_box_no_uq").on(t.cargoId, t.boxNo),
   ],
 );
@@ -196,9 +231,12 @@ export const attachments = pgTable(
     entity: varchar("entity", { length: 32 }).notNull(),
     entityId: uuid("entity_id").notNull(),
     fileName: varchar("file_name", { length: 255 }).notNull(), // asl nom
-    storedName: varchar("stored_name", { length: 64 }).notNull().unique(), // diskdagi nom
+    storedName: varchar("stored_name", { length: 64 }).notNull().unique(), // ichki identifikator
     mimeType: varchar("mime_type", { length: 128 }).notNull(),
     sizeBytes: integer("size_bytes").notNull(),
+    // Fayl baytlari — bazada saqlanadi (siqilgan rasm). Eski disk yozuvlarida
+    // null bo'lishi mumkin (o'sha holatda disk'dan o'qiladi — orqaga muvofiqlik).
+    data: bytea("data"),
     uploadedBy: uuid("uploaded_by").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

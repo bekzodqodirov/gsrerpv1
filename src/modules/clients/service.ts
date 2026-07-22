@@ -24,7 +24,7 @@ export async function listClients(search?: string) {
   return db.query.clients.findMany({
     where,
     orderBy: desc(clients.createdAt),
-    limit: 200,
+    limit: 2000,
   });
 }
 
@@ -46,7 +46,18 @@ export async function createClient(input: ClientCreateInput) {
     });
     if (taken) throw new Error("CODE_TAKEN");
   } else {
+    // Avtomatik kod: hisoblagichdan keyingi raqamni olamiz, lekin agar u kod
+    // allaqachon band bo'lsa (qo'lda kiritilgan kodlar hisoblagichni surmaydi)
+    // — xato bermasdan navbatdagi bo'sh kodgacha sakrab o'tamiz.
     code = await nextNumber("client");
+    for (let guard = 0; guard < 10000; guard++) {
+      const exists = await db.query.clients.findFirst({
+        where: eq(clients.code, code),
+        columns: { id: true },
+      });
+      if (!exists) break;
+      code = await nextNumber("client");
+    }
   }
   const [client] = await db
     .insert(clients)

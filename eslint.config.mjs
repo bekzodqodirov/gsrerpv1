@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    // Server action / effect imzolarida ishlatilmaydigan "_"-prefiksli
+    // argumentlar ataylab qoldiriladi (masalan useActionState (_prev, _formData)).
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none" },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

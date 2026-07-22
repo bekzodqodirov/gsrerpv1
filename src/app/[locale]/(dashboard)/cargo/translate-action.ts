@@ -1,18 +1,23 @@
 "use server";
 
-// Tovar nomini xitoychadan ruschaga tarjima qilish (yordamchi, majburiy emas).
+// Tovar nomini xitoychadan foydalanuvchi tiliga tarjima qilish (yordamchi).
 // Google Translate'ning kalitsiz ochiq endpointidan foydalanamiz — barqaror
 // xizmat emas, shu sababli har doim graceful fallback (xato bo'lsa — null).
 const CJK_RE = /[一-鿿]/;
 
+// Ilova tili → Google Translate tili kodi (xitoy manba tili uchun mos target).
+const TARGET: Record<string, string> = { uz: "uz", ru: "ru", en: "en", zh: "ru" };
+
 export async function translateProductNameAction(
   text: string,
+  locale = "ru",
 ): Promise<string | null> {
   const trimmed = text.trim();
   if (!trimmed || !CJK_RE.test(trimmed)) return null;
+  const tl = TARGET[locale] ?? "ru";
 
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-CN&tl=ru&dt=t&q=${encodeURIComponent(trimmed)}`;
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-CN&tl=${tl}&dt=t&q=${encodeURIComponent(trimmed)}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
 

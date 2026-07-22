@@ -1,6 +1,7 @@
 // Yuk servisi: ko'p qatorli qabul, karobka QR kodlari, ro'yxat, tafsilot.
 // Sklad xodimi (session.warehouseId bor) faqat o'z skladida ishlaydi.
-import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   cargos,
@@ -11,10 +12,13 @@ import {
   warehouses,
   auditLog,
   attachments,
+  batchCargos,
+  batches,
 } from "@/db/schema";
 import { requirePermission } from "@/modules/shared/auth";
 import { nextNumber } from "@/modules/shared/numbering";
-import { letterCodeForIndex, buildBoxCode } from "./box-code";
+import { RESTING_STATUSES } from "@/modules/stock/dto";
+import { letterCodeForIndex, buildBoxQr, nextLetterSeqs } from "./box-code";
 import {
   receiveCargoSchema,
   computeLineTotals,
@@ -82,7 +86,13 @@ export async function receiveCargo(input: ReceiveCargoInput) {
       })
       .returning();
 
-    await insertLinesAndBoxes(tx, c.id, data.lines, lineTotals, wh.gsCode, client.code);
+    // Harflar mijozning uzluksiz ketma-ketligidan ajratiladi (A,B,C → D,E...).
+    const letterSeqs = await allocateClientLetters(
+      tx,
+      client.id,
+      data.lines.length,
+    );
+    await insertLinesAndBoxes(tx, c.id, regNumber, data.lines, lineTotals, letterSeqs);
 
     await tx.insert(cargoEvents).values({
       cargoId: c.id,
@@ -138,6 +148,17 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
   const totalVolumeM3 = lineTotals.reduce((s, t) => s + t.totalVolumeM3, 0);
 
   const cargo = await db.transaction(async (tx) => {
+    // Mavjud harf-tartiblarni saqlaymiz — tahrirda harflar siljib ketmasin.
+    // Mijoz o'zgarmagan bo'lsa qayta ishlatamiz; o'zgargan bo'lsa yangi
+    // mijozdan yangi harflar ajratamiz (eskilari eski mijozda qoladi).
+    const oldLines = await tx.query.cargoLines.findMany({
+      where: eq(cargoLines.cargoId, cargoId),
+      orderBy: asc(cargoLines.lineNo),
+      columns: { letterSeq: true },
+    });
+    const reuse =
+      existing.clientId === client.id ? oldLines.map((l) => l.letterSeq) : [];
+
     await tx.delete(cargoBoxes).where(eq(cargoBoxes.cargoId, cargoId));
     await tx.delete(cargoLines).where(eq(cargoLines.cargoId, cargoId));
 
@@ -156,7 +177,13 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
       .where(eq(cargos.id, cargoId))
       .returning();
 
-    await insertLinesAndBoxes(tx, c.id, data.lines, lineTotals, wh.gsCode, client.code);
+    const letterSeqs = await allocateClientLetters(
+      tx,
+      client.id,
+      data.lines.length,
+      reuse,
+    );
+    await insertLinesAndBoxes(tx, c.id, c.regNumber, data.lines, lineTotals, letterSeqs);
 
     await tx.insert(cargoEvents).values({
       cargoId: c.id,
@@ -179,29 +206,60 @@ export async function updateCargo(cargoId: string, input: ReceiveCargoInput) {
   return cargo;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Mijozning uzluksiz harf ketma-ketligidan `count` ta tartib ajratadi.
+ * `reuse` — tahrirda saqlanadigan eski tartiblar (birinchi navbatda ular
+ * ishlatiladi); yetmagani mijoz hisoblagichidan (client.lastLetterSeq) olinadi
+ * va hisoblagich shuncha oshiriladi. Natija — qatorlar tartibida absolyut
+ * 0-based indekslar massivi.
+ */
+async function allocateClientLetters(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  clientId: string,
+  count: number,
+  reuse: number[] = [],
+): Promise<number[]> {
+  const reuseSorted = [...reuse].sort((a, b) => a - b).slice(0, count);
+  const extra = count - reuseSorted.length;
+
+  // Yangi harflar kerak bo'lsa — hisoblagichni ATOMAR oshiramiz (poyga bo'lmasin)
+  // va oldingi qiymatdan (freshBase) davom ettiramiz. Sof math nextLetterSeqs'da.
+  let freshBase = 0;
+  if (extra > 0) {
+    const [row] = await tx
+      .update(clients)
+      .set({ lastLetterSeq: sql`${clients.lastLetterSeq} + ${extra}` })
+      .where(eq(clients.id, clientId))
+      .returning({ last: clients.lastLetterSeq });
+    freshBase = Number(row.last) - extra;
+  }
+  return nextLetterSeqs(freshBase, count, reuseSorted).seqs;
+}
+
 async function insertLinesAndBoxes(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
   cargoId: string,
+  regNumber: string,
   lines: ReceiveCargoInput["lines"],
   lineTotals: ReturnType<typeof computeLineTotals>[],
-  gsCode: string,
-  clientCode: string,
+  letterSeqs: number[],
 ) {
   let boxNo = 0;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     const totals = lineTotals[i];
-    // Harf — tovar (qator) darajasida: shu tovarning barcha karobkalari
-    // bir xil harfni oladi.
-    const letterCode = letterCodeForIndex(i);
-    const qrCode = buildBoxCode(gsCode, clientCode, letterCode);
+    // Harf — mijoz bo'yicha uzluksiz tartibdan (guruhlash uchun, inson o'qiydi).
+    const letterSeq = letterSeqs[i];
+    const letterCode = letterCodeForIndex(letterSeq);
 
     const [line] = await tx
       .insert(cargoLines)
       .values({
         cargoId,
         lineNo: i + 1,
+        letterSeq,
         letterCode,
         productName: l.productName,
         boxCount: l.boxCount,
@@ -216,9 +274,15 @@ async function insertLinesAndBoxes(
       })
       .returning();
 
+    // Har karobka — o'z UNIKAL QR kodi bilan (scan qilish uchun).
     const boxRows = Array.from({ length: l.boxCount }, () => {
       boxNo += 1;
-      return { cargoId, lineId: line.id, boxNo, qrCode };
+      return {
+        cargoId,
+        lineId: line.id,
+        boxNo,
+        qrCode: buildBoxQr(regNumber, boxNo),
+      };
     });
     for (let j = 0; j < boxRows.length; j += 500) {
       await tx.insert(cargoBoxes).values(boxRows.slice(j, j + 500));
@@ -240,6 +304,10 @@ export async function listCargos(filter: CargoListFilter = {}) {
   }
   if (filter.status) {
     conds.push(eq(cargos.status, filter.status));
+  } else {
+    // Qaytarilgan yuklar UMUMIY ro'yxatda ko'rinmaydi — ular alohida
+    // "Qaytarilganlar" ro'yxatida (status='returned' bilan so'ralganda).
+    conds.push(ne(cargos.status, "returned"));
   }
   if (filter.q) {
     const q = `%${filter.q}%`;
@@ -340,6 +408,35 @@ export async function listCargos(filter: CargoListFilter = {}) {
     }
   }
 
+  // Yuk QAYSI partiyada ketyapti (ochiq/faol partiya) — ro'yxatda ko'rsatiladi.
+  const batchRows = cargoIds.length
+    ? await db
+        .select({
+          cargoId: batchCargos.cargoId,
+          batchId: batches.id,
+          code: batches.code,
+          status: batches.status,
+        })
+        .from(batchCargos)
+        .innerJoin(batches, eq(batchCargos.batchId, batches.id))
+        .where(
+          and(
+            inArray(batchCargos.cargoId, cargoIds),
+            inArray(batches.status, ["planned", "loading", "departed", "arrived"]),
+          ),
+        )
+    : [];
+  const batchByCargo = new Map<
+    string,
+    { batchId: string; code: string; status: string }
+  >();
+  for (const b of batchRows) {
+    // Bir yuk bir vaqtda faqat bitta ochiq partiyada bo'ladi — birinchisi yetarli.
+    if (!batchByCargo.has(b.cargoId)) {
+      batchByCargo.set(b.cargoId, { batchId: b.batchId, code: b.code, status: b.status });
+    }
+  }
+
   const linesByCargo = new Map<
     string,
     Array<(typeof lineRows)[number] & { photoId: string | null }>
@@ -369,6 +466,7 @@ export async function listCargos(filter: CargoListFilter = {}) {
     lines: linesByCargo.get(r.id) ?? [],
     photoId: firstPhotoByCargo.get(r.id) ?? null,
     files: filesByCargo.get(r.id) ?? [],
+    batch: batchByCargo.get(r.id) ?? null,
   }));
 }
 
@@ -376,6 +474,7 @@ export async function listCargos(filter: CargoListFilter = {}) {
 export async function getCargo(id: string) {
   const session = await requirePermission("cargo.view");
 
+  const originWh = alias(warehouses, "origin_wh");
   const rows = await db
     .select({
       cargo: cargos,
@@ -384,10 +483,15 @@ export async function getCargo(id: string) {
       warehouseCode: warehouses.code,
       warehouseName: warehouses.name,
       warehouseGsCode: warehouses.gsCode,
+      // Yuk QAYSI skladdan kelgani (yorliqda ko'rsatiladi) — qabul qilingan sklad:
+      originCode: originWh.code,
+      originName: originWh.name,
+      originGsCode: originWh.gsCode,
     })
     .from(cargos)
     .innerJoin(clients, eq(cargos.clientId, clients.id))
     .leftJoin(warehouses, eq(cargos.currentWarehouseId, warehouses.id))
+    .leftJoin(originWh, eq(cargos.originWarehouseId, originWh.id))
     .where(eq(cargos.id, id))
     .limit(1);
   const row = rows[0];
@@ -432,6 +536,7 @@ export async function getCargoBoxes(cargoId: string) {
       lineId: cargoBoxes.lineId,
       boxNo: cargoBoxes.boxNo,
       qrCode: cargoBoxes.qrCode,
+      boxUid: cargoBoxes.boxUid,
       letterCode: cargoLines.letterCode,
       productName: cargoLines.productName,
       boxCount: cargoLines.boxCount,
@@ -448,6 +553,73 @@ export async function getCargoBoxes(cargoId: string) {
     seenInLine.set(b.lineId, position);
     return { ...b, position };
   });
+}
+
+/**
+ * Yukni QAYTARISH: omborga kelib bo'lgan (jismonan turgan) yukni "qaytarildi"
+ * deb belgilaydi. Status RESTING_STATUSES ga kirmagani uchun yuk qoldiqdan
+ * o'z-o'zidan chiqadi. Sabab cargo_event'ga yoziladi (tarix uchun).
+ */
+export async function returnCargo(cargoId: string, reason: string) {
+  const session = await requirePermission("cargo.move");
+  const cargo = await db.query.cargos.findFirst({
+    where: eq(cargos.id, cargoId),
+  });
+  if (!cargo || cargo.voided) throw new Error("NOT_FOUND");
+  // Sklad xodimi faqat o'z omboridagini qaytaradi.
+  if (session.warehouseId && cargo.currentWarehouseId !== session.warehouseId) {
+    throw new Error("NOT_HERE");
+  }
+  // Faqat omborda jismonan turgan yukni qaytarish mumkin.
+  if (!(RESTING_STATUSES as readonly string[]).includes(cargo.status)) {
+    throw new Error("NOT_RETURNABLE");
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(cargos)
+      .set({ status: "returned", updatedAt: new Date() })
+      .where(eq(cargos.id, cargoId));
+    await tx.insert(cargoEvents).values({
+      cargoId,
+      type: "status_change",
+      fromStatus: cargo.status,
+      toStatus: "returned",
+      comment: reason.trim() || null,
+      userId: session.sub,
+    });
+  });
+  return { id: cargoId };
+}
+
+/**
+ * Qaytarilgan yukni SAQLANGAN joyidan (returned) butunlay o'chirish.
+ * O'chirish = voided (yumshoq o'chirish): barcha ro'yxatlardan yo'qoladi,
+ * lekin tarix (audit/event) saqlanadi. Faqat 'returned' holatidagi yuk uchun.
+ */
+export async function deleteReturnedCargo(cargoId: string) {
+  const session = await requirePermission("cargo.move");
+  const cargo = await db.query.cargos.findFirst({
+    where: eq(cargos.id, cargoId),
+  });
+  if (!cargo || cargo.voided) throw new Error("NOT_FOUND");
+  if (cargo.status !== "returned") throw new Error("NOT_RETURNED");
+  if (session.warehouseId && cargo.currentWarehouseId !== session.warehouseId) {
+    throw new Error("NOT_HERE");
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(cargos)
+      .set({ voided: true, updatedAt: new Date() })
+      .where(eq(cargos.id, cargoId));
+    await tx.insert(cargoEvents).values({
+      cargoId,
+      type: "note",
+      comment: "returned cargo permanently removed",
+      userId: session.sub,
+    });
+  });
+  return { id: cargoId };
 }
 
 /** Forma uchun: faol mijozlar va qabul qiluvchi skladlar. */

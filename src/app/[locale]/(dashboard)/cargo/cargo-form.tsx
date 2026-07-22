@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useRef, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useActionState, useRef, useEffect, useState, startTransition } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { Button, Input, Select, Field, controlCls, cn } from "@/components/ui";
 import { icons } from "@/components/icons";
 import { receiveCargoAction, type CargoFormState } from "./actions";
 import { translateProductNameAction } from "./translate-action";
+import { compressImages } from "@/components/image-compress";
 
 type Option = { id: string; code: string; name: string };
 
@@ -19,6 +20,7 @@ type Line = {
   totalWeightKg: string;
   totalVolumeM3: string;
   manual: boolean; // o'lchab bo'lmagan: umumiy kg/kub qo'lda
+  photos: File[]; // qator (tovar) rasmlari — yuborishdan oldin siqiladi
 };
 
 export type InitialCargoLine = {
@@ -42,6 +44,7 @@ const emptyLine = (): Line => ({
   totalWeightKg: "",
   totalVolumeM3: "",
   manual: false,
+  photos: [],
 });
 
 function lineFromInitial(l: InitialCargoLine): Line {
@@ -56,6 +59,7 @@ function lineFromInitial(l: InitialCargoLine): Line {
     totalWeightKg: manual ? l.totalWeightKg : "",
     totalVolumeM3: manual ? l.totalVolumeM3 : "",
     manual,
+    photos: [],
   };
 }
 
@@ -91,36 +95,36 @@ function linePreview(l: Line): { kg: number; m3: number } | null {
   return kg || m3 ? { kg, m3 } : null;
 }
 
-/** Kichik, kamtarona "rasm qo'shish" tugmasi — to'liq inputga qaraganda ancha ixcham. */
-function PhotoPicker({ name, label }: { name: string; label: string }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [count, setCount] = useState(0);
-
+/** Kichik, kamtarona "rasm qo'shish" tugmasi — to'liq inputga qaraganda ancha ixcham.
+ *  Tanlangan fayllar state'da saqlanadi (yuborishdan oldin siqiladi). */
+function PhotoPicker({
+  label,
+  files,
+  onFiles,
+}: {
+  label: string;
+  files: File[];
+  onFiles: (files: File[]) => void;
+}) {
+  // <label> ichidagi input — mobil brauzerlarda tugma orqali dasturiy click'dan
+  // ko'ra ishonchli (native tap file dialogni ochadi).
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground">
       <input
-        ref={inputRef}
-        name={name}
         type="file"
         multiple
         accept="image/*"
-        className="hidden"
-        onChange={(e) => setCount(e.target.files?.length ?? 0)}
+        className="sr-only"
+        onChange={(e) => onFiles(Array.from(e.target.files ?? []))}
       />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="inline-flex h-10 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-      >
-        {icons.camera("h-3.5 w-3.5")}
-        {label}
-        {count > 0 && (
-          <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
-            {count}
-          </span>
-        )}
-      </button>
-    </div>
+      {icons.camera("h-3.5 w-3.5")}
+      {label}
+      {files.length > 0 && (
+        <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+          {files.length}
+        </span>
+      )}
+    </label>
   );
 }
 
@@ -215,6 +219,7 @@ export function CargoForm({
 }) {
   const t = useTranslations("cargo");
   const tc = useTranslations("common");
+  const locale = useLocale();
   const isEdit = Boolean(cargoId);
   const formRef = useRef<HTMLFormElement>(null);
   const [lines, setLines] = useState<Line[]>(
@@ -225,21 +230,58 @@ export function CargoForm({
   const [clientError, setClientError] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId ?? "");
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
+  const [preparing, setPreparing] = useState(false); // rasmlarni siqish jarayoni
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [state, formAction, pending] = useActionState<CargoFormState, FormData>(
     receiveCargoAction,
     {},
   );
 
+  // Muvaffaqiyatli qabul (tashqi hodisa — server javobi) dan keyin formani
+  // tozalash: shu hodisaga sinxronlanadi.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (state.createdReg && !isEdit) {
       formRef.current?.reset();
       setLines([emptyLine()]);
       setClientId("");
       setWarehouseId("");
+      setReceiptFiles([]);
       setResetKey((k) => k + 1);
     }
   }, [state.createdReg, isEdit]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  /**
+   * Yuborish: rasmlarni brauzerda siqib, FormData ni qo'lda yig'amiz.
+   * (Siqish server action body limitiga urilmaslik + bazani yengil tutish uchun.)
+   */
+  async function submitCompressed() {
+    setConfirmOpen(false);
+    setPreparing(true);
+    try {
+      const fd = new FormData();
+      if (cargoId) fd.set("cargoId", cargoId);
+      fd.set("clientId", clientId);
+      fd.set("originWarehouseId", warehouseId);
+      fd.set("note", initialNote ?? "");
+      fd.set("linesJson", JSON.stringify(lines.map(lineToPayload)));
+
+      const receipts = await compressImages(receiptFiles);
+      for (const f of receipts) fd.append("files", f);
+
+      for (let i = 0; i < lines.length; i++) {
+        const photos = await compressImages(lines[i].photos);
+        for (const p of photos) fd.append(`linePhotos_${i}`, p);
+      }
+      // useActionState dispatchini transition ichida chaqiramiz — aks holda
+      // `pending` (isPending) to'g'ri yangilanmaydi (brauzer ogohlantirishi).
+      startTransition(() => formAction(fd));
+    } finally {
+      setPreparing(false);
+    }
+  }
 
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((prev) => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -248,7 +290,7 @@ export function CargoForm({
     const name = lines[i].productName;
     if (!name.trim() || name.includes("(")) return;
     setTranslatingIdx(i);
-    const translated = await translateProductNameAction(name);
+    const translated = await translateProductNameAction(name, locale);
     setTranslatingIdx(null);
     if (translated) {
       setLine(i, { productName: `${name} (${translated})` });
@@ -284,15 +326,7 @@ export function CargoForm({
   }
 
   return (
-    <form ref={formRef} action={formAction}>
-      {cargoId && <input type="hidden" name="cargoId" value={cargoId} />}
-      <input type="hidden" name="clientId" value={clientId} />
-      <input
-        type="hidden"
-        name="linesJson"
-        value={JSON.stringify(lines.map(lineToPayload))}
-      />
-
+    <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
       {/* Prixod sarlavhasi */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={t("client")} required>
@@ -339,10 +373,10 @@ export function CargoForm({
 
         <Field label={t("receiptFiles")}>
           <input
-            name="files"
             type="file"
             multiple
             accept="image/*,.pdf,.xls,.xlsx,.doc,.docx"
+            onChange={(e) => setReceiptFiles(Array.from(e.target.files ?? []))}
             className={cn(
               controlCls,
               "file:mr-3 file:h-full file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-primary",
@@ -417,7 +451,7 @@ export function CargoForm({
 
                 <Field label={t("boxCount")} required>
                   <Input
-                    type="number"
+                    type="text"
                     min="1"
                     step="1"
                     inputMode="numeric"
@@ -430,7 +464,7 @@ export function CargoForm({
                 {l.manual ? (
                   <Field label={t("totalWeight")} required>
                     <Input
-                      type="number"
+                      type="text"
                       min="0.001"
                       step="0.001"
                       inputMode="decimal"
@@ -450,7 +484,7 @@ export function CargoForm({
                         <span key={k} className="flex flex-1 items-center gap-1">
                           {di > 0 && <span className="text-xs text-muted">×</span>}
                           <Input
-                            type="number"
+                            type="text"
                             min="0.1"
                             step="0.1"
                             inputMode="decimal"
@@ -470,7 +504,7 @@ export function CargoForm({
                 {l.manual ? (
                   <Field label={t("totalVolume")} required>
                     <Input
-                      type="number"
+                      type="text"
                       min="0.0001"
                       step="0.0001"
                       inputMode="decimal"
@@ -484,7 +518,7 @@ export function CargoForm({
                 ) : (
                   <Field label={t("weightPerBox")} required>
                     <Input
-                      type="number"
+                      type="text"
                       min="0.001"
                       step="0.001"
                       inputMode="decimal"
@@ -499,8 +533,9 @@ export function CargoForm({
 
                 <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:justify-end">
                   <PhotoPicker
-                    name={`linePhotos_${i}`}
                     label={t("linePhotos")}
+                    files={l.photos}
+                    onFiles={(photos) => setLine(i, { photos })}
                   />
                 </div>
               </div>
@@ -549,10 +584,16 @@ export function CargoForm({
       <Button
         type="button"
         onClick={handleReviewClick}
-        disabled={pending}
+        disabled={pending || preparing}
         className="mt-4"
       >
-        {pending ? tc("loading") : isEdit ? t("saveChanges") : t("receive")}
+        {preparing
+          ? t("compressing")
+          : pending
+            ? tc("loading")
+            : isEdit
+              ? t("saveChanges")
+              : t("receive")}
       </Button>
 
       {confirmOpen && (
@@ -614,13 +655,7 @@ export function CargoForm({
               >
                 {t("confirmCancel")}
               </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setConfirmOpen(false);
-                  formRef.current?.requestSubmit();
-                }}
-              >
+              <Button type="button" onClick={submitCompressed}>
                 {t("confirmSubmit")}
               </Button>
             </div>

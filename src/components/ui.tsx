@@ -10,7 +10,7 @@ export function cn(...parts: Array<string | false | null | undefined>) {
 /* ─── Button ──────────────────────────────────────────────────────────── */
 
 type ButtonVariant = "primary" | "outline" | "ghost" | "danger";
-type ButtonSize = "sm" | "md";
+type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
@@ -25,12 +25,17 @@ const buttonVariants: Record<ButtonVariant, string> = {
 const buttonSizes: Record<ButtonSize, string> = {
   sm: "h-8 px-3 text-xs",
   md: "h-10 px-4 text-sm",
+  // Telefonda ishlatiladigan katta tugmalar (masalan skaner ekrani).
+  lg: "h-13 px-5 text-base",
+  // Kvadrat, faqat ikonka uchun — padding yo'q (kontent markazda).
+  icon: "h-13 w-13 text-base",
 };
 
 export function Button({
   variant = "primary",
   size = "md",
   className,
+  type = "button",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
@@ -38,8 +43,11 @@ export function Button({
 }) {
   return (
     <button
+      type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50",
+        // touch-manipulation: mobil brauzerda pull-to-refresh yoki
+        // double-tap-zoom bosishni "yutib qo'ymasin" — barcha tugmalar uchun.
+        "touch-manipulation inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50",
         buttonVariants[variant],
         buttonSizes[size],
         className,
@@ -139,7 +147,7 @@ export function CollapsibleCard({
       open={defaultOpen}
       className="group rounded-xl border border-line bg-surface shadow-sm"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold select-none hover:bg-surface-2 group-open:rounded-b-none">
+      <summary className="touch-manipulation flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3.5 text-sm font-semibold select-none hover:bg-surface-2 group-open:rounded-b-none">
         <span className="flex items-center gap-2">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary-soft text-primary">
             <svg

@@ -18,4 +18,6 @@ export const statusColors: Record<string, string> = {
   delivered: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   held: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   lost: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  returned:
+    "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
 };
