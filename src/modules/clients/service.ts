@@ -24,7 +24,7 @@ export async function listClients(search?: string) {
   return db.query.clients.findMany({
     where,
     orderBy: desc(clients.createdAt),
-    limit: 200,
+    limit: 2000,
   });
 }
 
