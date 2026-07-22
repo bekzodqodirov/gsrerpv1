@@ -40,6 +40,14 @@ export const icons = {
       <path d="M12 13v9" />
     </Icon>
   ),
+  pallet: (c?: string) => (
+    <Icon className={c}>
+      <rect x="3" y="4" width="18" height="12" rx="1" />
+      <path d="M3 9h18" />
+      <path d="M12 4v12" />
+      <path d="M6 20h4M14 20h4" />
+    </Icon>
+  ),
   stock: (c?: string) => (
     <Icon className={c}>
       <path d="M3 21V8l9-4 9 4v13" />

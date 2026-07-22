@@ -19,6 +19,7 @@ import {
   docSequences,
 } from "@/db/schema";
 import type { ScanResult } from "./dto";
+import { palletBoxIds } from "@/modules/repack/service";
 import { getSession, requirePermission } from "@/modules/shared/auth";
 import type { SessionPayload } from "@/modules/shared/session";
 import { nextNumber } from "@/modules/shared/numbering";
@@ -533,6 +534,71 @@ async function unloadProgress(batchId: string) {
 }
 
 /** Yuklash scani: karobka QR kodini scan qiladi (kamera/skaner/qo'lda). */
+/**
+ * Yashik (paddon) QR'i scan qilinganda: ichidagi BARCHA karobkani birvarakay
+ * yuklaydi/tushiradi (qaror: yuklashda yashik QR'i scan qilinadi). Kod yashik
+ * bo'lmasa null qaytaradi (chaqiruvchi oddiy karobka scaniga o'tadi).
+ */
+async function applyPalletScan(
+  batchId: string,
+  code: string,
+  mode: "load" | "unload",
+  userId: string,
+): Promise<ScanResult | null> {
+  const pal = await palletBoxIds(code);
+  if (!pal) return null; // yashik emas
+  const progress = mode === "load" ? loadProgress : unloadProgress;
+
+  if (pal.boxIds.length === 0) {
+    const p = await progress(batchId);
+    return { outcome: "not_on_plan", code, done: p.done, total: p.total };
+  }
+
+  const doneCol =
+    mode === "load" ? batchBoxes.loadedScan : batchBoxes.unloadedScan;
+  const bbs = await db
+    .select({ id: batchBoxes.id, done: doneCol })
+    .from(batchBoxes)
+    .where(
+      and(eq(batchBoxes.batchId, batchId), inArray(batchBoxes.boxId, pal.boxIds)),
+    );
+
+  if (bbs.length === 0) {
+    return { outcome: mode === "load" ? "not_on_plan" : "extra", code };
+  }
+  const pending = bbs.filter((x) => !x.done).map((x) => x.id);
+  if (pending.length === 0) {
+    const p = await progress(batchId);
+    return { outcome: "duplicate", code, done: p.done, total: p.total };
+  }
+
+  const now = new Date();
+  await db
+    .update(batchBoxes)
+    .set(
+      mode === "load"
+        ? { loadedScan: true, loadedAt: now, loadedBy: userId, flag: null }
+        : { unloadedScan: true, unloadedAt: now, unloadedBy: userId, flag: null },
+    )
+    .where(inArray(batchBoxes.id, pending));
+
+  if (mode === "load") {
+    await db
+      .update(batches)
+      .set({ status: "loading", updatedAt: now })
+      .where(and(eq(batches.id, batchId), eq(batches.status, "planned")));
+  }
+
+  const p = await progress(batchId);
+  return {
+    outcome: mode === "load" ? "loaded" : "unloaded",
+    code,
+    done: p.done,
+    total: p.total,
+    label: `📦 ${code} · ${pending.length}`,
+  };
+}
+
 export async function scanLoad(batchId: string, code: string): Promise<ScanResult> {
   const session = await requireAny(["tms.manage", "tms.load"]);
   const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
@@ -552,6 +618,9 @@ export async function scanLoad(batchId: string, code: string): Promise<ScanResul
   const hit = rows[0];
 
   if (!hit) {
+    // Yashik (paddon) QR'i bo'lishi mumkin — ichidagi hamma karobkani yuklaymiz.
+    const pal = await applyPalletScan(batchId, code, "load", session.sub);
+    if (pal) return pal;
     const known = await db.query.cargoBoxes.findFirst({ where: eq(cargoBoxes.qrCode, code) });
     return { outcome: known ? "not_on_plan" : "unknown", code };
   }
@@ -591,6 +660,9 @@ export async function scanUnload(batchId: string, code: string): Promise<ScanRes
   const hit = rows[0];
 
   if (!hit) {
+    // Yashik (paddon) QR'i — ichidagi hamma karobkani birga tushiramiz.
+    const pal = await applyPalletScan(batchId, code, "unload", session.sub);
+    if (pal) return pal;
     // Manifestda yo'q: ortiqcha (boshqa partiya karobkasi) yoki noma'lum.
     const known = await db.query.cargoBoxes.findFirst({ where: eq(cargoBoxes.qrCode, code) });
     return { outcome: known ? "extra" : "unknown", code };

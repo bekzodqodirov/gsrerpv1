@@ -157,12 +157,19 @@ export const cargoLines = pgTable(
 
 export const pallets = pgTable("pallet", {
   id: uuid("id").primaryKey().defaultRandom(),
-  code: varchar("code", { length: 64 }).notNull().unique(), // PLT-2026-0001
+  code: varchar("code", { length: 64 }).notNull().unique(), // PLT-2026-0001 (yashik QR'i)
   warehouseId: uuid("warehouse_id")
     .notNull()
     .references(() => warehouses.id),
+  // Bitta yashik = bitta mijoz (qaror). Ichidagi karobkalar shu mijozniki.
+  clientId: uuid("client_id")
+    .notNull()
+    .references(() => clients.id),
+  // open — hali to'ldirilmoqda; closed — yopilgan (yuklashga tayyor).
+  status: varchar("status", { length: 16 }).notNull().default("open"),
   note: text("note"),
   createdBy: uuid("created_by").references(() => users.id),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
