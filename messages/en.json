@@ -469,5 +469,14 @@
     "labelTitle": "Crate label",
     "contents": "Contents",
     "print": "Print"
+  },
+  "table": {
+    "search": "Search…",
+    "columns": "Columns",
+    "filters": "Filters",
+    "reset": "Reset",
+    "noMatch": "No matches",
+    "all": "All",
+    "empty": "Empty"
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Button, Input, Select, Field, controlCls, cn } from "@/components/ui";
 import { icons } from "@/components/icons";
 import { receiveCargoAction, type CargoFormState } from "./actions";
@@ -106,32 +106,25 @@ function PhotoPicker({
   files: File[];
   onFiles: (files: File[]) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
+  // <label> ichidagi input — mobil brauzerlarda tugma orqali dasturiy click'dan
+  // ko'ra ishonchli (native tap file dialogni ochadi).
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground">
       <input
-        ref={inputRef}
         type="file"
         multiple
         accept="image/*"
-        className="hidden"
+        className="sr-only"
         onChange={(e) => onFiles(Array.from(e.target.files ?? []))}
       />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="inline-flex h-10 items-center gap-1.5 rounded-md border border-line px-2.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-      >
-        {icons.camera("h-3.5 w-3.5")}
-        {label}
-        {files.length > 0 && (
-          <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
-            {files.length}
-          </span>
-        )}
-      </button>
-    </div>
+      {icons.camera("h-3.5 w-3.5")}
+      {label}
+      {files.length > 0 && (
+        <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+          {files.length}
+        </span>
+      )}
+    </label>
   );
 }
 
@@ -226,6 +219,7 @@ export function CargoForm({
 }) {
   const t = useTranslations("cargo");
   const tc = useTranslations("common");
+  const locale = useLocale();
   const isEdit = Boolean(cargoId);
   const formRef = useRef<HTMLFormElement>(null);
   const [lines, setLines] = useState<Line[]>(
@@ -290,7 +284,7 @@ export function CargoForm({
     const name = lines[i].productName;
     if (!name.trim() || name.includes("(")) return;
     setTranslatingIdx(i);
-    const translated = await translateProductNameAction(name);
+    const translated = await translateProductNameAction(name, locale);
     setTranslatingIdx(null);
     if (translated) {
       setLine(i, { productName: `${name} (${translated})` });
@@ -451,7 +445,7 @@ export function CargoForm({
 
                 <Field label={t("boxCount")} required>
                   <Input
-                    type="number"
+                    type="text"
                     min="1"
                     step="1"
                     inputMode="numeric"
@@ -464,7 +458,7 @@ export function CargoForm({
                 {l.manual ? (
                   <Field label={t("totalWeight")} required>
                     <Input
-                      type="number"
+                      type="text"
                       min="0.001"
                       step="0.001"
                       inputMode="decimal"
@@ -484,7 +478,7 @@ export function CargoForm({
                         <span key={k} className="flex flex-1 items-center gap-1">
                           {di > 0 && <span className="text-xs text-muted">×</span>}
                           <Input
-                            type="number"
+                            type="text"
                             min="0.1"
                             step="0.1"
                             inputMode="decimal"
@@ -504,7 +498,7 @@ export function CargoForm({
                 {l.manual ? (
                   <Field label={t("totalVolume")} required>
                     <Input
-                      type="number"
+                      type="text"
                       min="0.0001"
                       step="0.0001"
                       inputMode="decimal"
@@ -518,7 +512,7 @@ export function CargoForm({
                 ) : (
                   <Field label={t("weightPerBox")} required>
                     <Input
-                      type="number"
+                      type="text"
                       min="0.001"
                       step="0.001"
                       inputMode="decimal"

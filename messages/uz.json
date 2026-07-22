@@ -469,5 +469,14 @@
     "labelTitle": "Yashik yorlig'i",
     "contents": "Tarkib",
     "print": "Chop etish"
+  },
+  "table": {
+    "search": "Qidirish…",
+    "columns": "Ustunlar",
+    "filters": "Filtr",
+    "reset": "Tozalash",
+    "noMatch": "Mos yozuv yo'q",
+    "all": "Hammasi",
+    "empty": "Bo'sh"
   }
 }
