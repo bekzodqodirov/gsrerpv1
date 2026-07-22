@@ -321,7 +321,13 @@
     "currentPlan": "当前计划",
     "scan_wrong_warehouse": "不属于您的仓库！",
     "editBatch": "编辑批次",
-    "notEditable": "此状态无法编辑"
+    "notEditable": "此状态无法编辑",
+    "loadOrder": "装车顺序",
+    "loadOrderHint": "先装重货（放底部），后装轻货（放顶部）。",
+    "heavy": "重",
+    "medium": "中",
+    "light": "轻",
+    "perBoxKg": "公斤/箱"
   },
   "batchStatus": {
     "planned": "已计划",

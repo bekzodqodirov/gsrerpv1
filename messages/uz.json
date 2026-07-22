@@ -321,7 +321,13 @@
     "currentPlan": "Joriy plan",
     "scan_wrong_warehouse": "bu sizning skladingiz uchun emas!",
     "editBatch": "Partiyani tahrirlash",
-    "notEditable": "Bu holatda tahrirlab bo'lmaydi"
+    "notEditable": "Bu holatda tahrirlab bo'lmaydi",
+    "loadOrder": "Yuklash tartibi",
+    "loadOrderHint": "Og'ir yuklarni birinchi (tagiga), yengillarini oxirida (ustiga) yuklang.",
+    "heavy": "Og'ir",
+    "medium": "O'rta",
+    "light": "Yengil",
+    "perBoxKg": "kg/karobka"
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

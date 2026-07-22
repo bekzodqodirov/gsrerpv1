@@ -321,7 +321,13 @@
     "currentPlan": "Current plan",
     "scan_wrong_warehouse": "not for your warehouse!",
     "editBatch": "Edit batch",
-    "notEditable": "Cannot edit in this status"
+    "notEditable": "Cannot edit in this status",
+    "loadOrder": "Loading order",
+    "loadOrderHint": "Load heavy cargo first (bottom), light cargo last (top).",
+    "heavy": "Heavy",
+    "medium": "Medium",
+    "light": "Light",
+    "perBoxKg": "kg/box"
   },
   "batchStatus": {
     "planned": "Planned",

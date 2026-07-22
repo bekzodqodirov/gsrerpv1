@@ -314,7 +314,23 @@ export default async function BatchDetailPage({
         </Card>
       )}
 
-      {/* ─── Ish varag'i / manifest (tovar darajasida, zona tartibida) ─── */}
+      {/* ─── Yuklash tartibi: OG'IR yuklar tagiga, yengillari ustiga ─── */}
+      {editable && canLoad && lines.length > 0 && (
+        <LoadingOrderCard
+          lines={lines}
+          num={num}
+          labels={{
+            title: t("loadOrder"),
+            hint: t("loadOrderHint"),
+            heavy: t("heavy"),
+            medium: t("medium"),
+            light: t("light"),
+            perBoxKg: t("perBoxKg"),
+          }}
+        />
+      )}
+
+      {/* ─── Ish varag'i / manifest (tovar darajasida) ─── */}
       <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-muted">{t("manifest")}</h2>
@@ -421,6 +437,104 @@ export default async function BatchDetailPage({
         </TableWrap>
       </div>
     </div>
+  );
+}
+
+/* ─── Yuklash tartibi kartasi: og'irlarni tagiga, yengillarni ustiga ─── */
+
+type OrderLine = {
+  lineId: string;
+  productName: string;
+  clientCode: string;
+  letterCode: string;
+  planned: number;
+  plannedKg: number;
+  photoId: string | null;
+};
+
+function LoadingOrderCard({
+  lines,
+  num,
+  labels,
+}: {
+  lines: OrderLine[];
+  num: (n: number, d?: number) => string;
+  labels: {
+    title: string;
+    hint: string;
+    heavy: string;
+    medium: string;
+    light: string;
+    perBoxKg: string;
+  };
+}) {
+  // Har tovarning BITTA karobkasi og'irligi bo'yicha tartiblanadi (og'ir → yengil).
+  const ranked = lines
+    .map((l) => ({ ...l, perBox: l.planned > 0 ? l.plannedKg / l.planned : 0 }))
+    .sort((a, b) => b.perBox - a.perBox);
+  const maxPerBox = ranked.length ? ranked[0].perBox : 0;
+
+  // Og'irlik sinfi — shu partiya ichida nisbatan (eng og'irga nisbatan).
+  const klass = (perBox: number): { label: string; cls: string } => {
+    if (maxPerBox <= 0) return { label: labels.light, cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" };
+    const r = perBox / maxPerBox;
+    if (r >= 0.66)
+      return { label: labels.heavy, cls: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" };
+    if (r >= 0.33)
+      return { label: labels.medium, cls: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" };
+    return { label: labels.light, cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" };
+  };
+
+  return (
+    <Card className="p-4 print:hidden">
+      <div className="mb-1 text-sm font-semibold">{labels.title}</div>
+      <p className="mb-3 text-xs text-muted">{labels.hint}</p>
+      <ol className="space-y-2">
+        {ranked.map((l, i) => {
+          const k = klass(l.perBox);
+          return (
+            <li
+              key={l.lineId}
+              className="flex items-center gap-3 rounded-lg border border-line bg-surface p-2"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft font-mono text-sm font-bold text-primary">
+                {i + 1}
+              </span>
+              {l.photoId ? (
+                <PhotoThumbs
+                  photos={[{ id: l.photoId, name: l.productName }]}
+                  thumbClass="h-10 w-10"
+                />
+              ) : (
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
+                  {icons.camera("h-4 w-4")}
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">
+                  {l.productName}
+                </span>
+                <span className="font-mono text-xs text-muted">
+                  {l.clientCode}-{l.letterCode} · {num(l.planned)}
+                </span>
+              </span>
+              <span className="text-right">
+                <span
+                  className={
+                    "inline-block rounded-md px-2 py-0.5 text-xs font-bold " + k.cls
+                  }
+                >
+                  {k.label}
+                </span>
+                <span className="mt-0.5 block font-mono text-xs tabular-nums text-muted">
+                  {num(l.perBox, 1)} {labels.perBoxKg}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
   );
 }
 
