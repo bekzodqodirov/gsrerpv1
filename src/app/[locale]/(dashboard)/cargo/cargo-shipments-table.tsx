@@ -242,7 +242,6 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
     {
       id: "reg",
       header: t("regNumber"),
-      locked: true,
       value: (c) => c.regNumber,
       filter: "text",
       cell: (c) => (
@@ -315,6 +314,7 @@ export function CargoShipmentsTable({ rows }: { rows: Row[] }) {
       rows={rows}
       getRowKey={(r) => r.id}
       labels={labels}
+      rowHref={(r) => `/cargo/${r.id}`}
       renderExpanded={(row) => <LineDetails row={row} />}
     />
   );

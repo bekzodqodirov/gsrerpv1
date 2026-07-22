@@ -12,6 +12,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useRouter } from "@/i18n/routing";
 import { icons } from "@/components/icons";
 
 export type Column<T> = {
@@ -49,6 +50,7 @@ export function DataTable<T>({
   getRowKey,
   labels: L,
   renderExpanded,
+  rowHref,
   initialShowFilters = false,
 }: {
   tableId: string;
@@ -57,8 +59,11 @@ export function DataTable<T>({
   getRowKey: (row: T) => string;
   labels: DataTableLabels;
   renderExpanded?: (row: T) => ReactNode;
+  /** Berilsa — butun qator/karta shu manzilga link bo'ladi (chevron kengaytiradi). */
+  rowHref?: (row: T) => string;
   initialShowFilters?: boolean;
 }) {
+  const router = useRouter();
   // ── Ko'rinadigan ustunlar (localStorage) ──
   const storageKey = `dt:${tableId}:cols`;
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -301,35 +306,48 @@ export function DataTable<T>({
               filtered.map((row) => {
                 const key = getRowKey(row);
                 const isOpen = expanded === key;
+                const clickable = Boolean(rowHref || renderExpanded);
                 return (
                   <Fragment key={key}>
                     <tr
                       className={
                         "border-t border-line/60 " +
-                        (renderExpanded ? "cursor-pointer hover:bg-surface-2/40" : "")
+                        (clickable ? "cursor-pointer hover:bg-surface-2/40" : "")
                       }
                       onClick={
-                        renderExpanded
-                          ? () => setExpanded(isOpen ? null : key)
-                          : undefined
+                        rowHref
+                          ? () => router.push(rowHref(row))
+                          : renderExpanded
+                            ? () => setExpanded(isOpen ? null : key)
+                            : undefined
                       }
                     >
                       {renderExpanded && (
-                        <td className="pl-3 text-muted">
-                          <svg
-                            viewBox="0 0 16 16"
-                            className={
-                              "h-4 w-4 transition-transform " +
-                              (isOpen ? "rotate-90" : "")
-                            }
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                        <td className="pl-3">
+                          <button
+                            type="button"
+                            aria-label="expand"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpanded(isOpen ? null : key);
+                            }}
+                            className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-surface-2"
                           >
-                            <path d="M6 4l4 4-4 4" />
-                          </svg>
+                            <svg
+                              viewBox="0 0 16 16"
+                              className={
+                                "h-4 w-4 transition-transform " +
+                                (isOpen ? "rotate-90" : "")
+                              }
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M6 4l4 4-4 4" />
+                            </svg>
+                          </button>
                         </td>
                       )}
                       {visibleCols.map((c) => (
@@ -371,24 +389,50 @@ export function DataTable<T>({
                 key={key}
                 className="rounded-xl border border-line bg-surface p-3"
               >
-                <div
-                  className={renderExpanded ? "cursor-pointer" : ""}
-                  onClick={
-                    renderExpanded
-                      ? () => setExpanded(isOpen ? null : key)
-                      : undefined
-                  }
-                >
-                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {visibleCols.map((c) => (
-                      <div key={c.id} className="contents">
-                        <dt className="text-xs text-muted">{c.header}</dt>
-                        <dd className={"text-sm " + alignCls("left")}>
-                          {c.cell(row)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
+                <div className="flex items-start gap-2">
+                  <div
+                    className={"min-w-0 flex-1 " + (rowHref ? "cursor-pointer" : renderExpanded ? "cursor-pointer" : "")}
+                    onClick={
+                      rowHref
+                        ? () => router.push(rowHref(row))
+                        : renderExpanded
+                          ? () => setExpanded(isOpen ? null : key)
+                          : undefined
+                    }
+                  >
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                      {visibleCols.map((c) => (
+                        <div key={c.id} className="contents">
+                          <dt className="text-xs text-muted">{c.header}</dt>
+                          <dd className={"text-sm " + alignCls("left")}>
+                            {c.cell(row)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                  {renderExpanded && (
+                    <button
+                      type="button"
+                      aria-label="expand"
+                      onClick={() => setExpanded(isOpen ? null : key)}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-2"
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        className={
+                          "h-4 w-4 transition-transform " + (isOpen ? "rotate-90" : "")
+                        }
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M6 4l4 4-4 4" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
                 {isOpen && renderExpanded && (
                   <div className="mt-2 border-t border-line pt-2">
