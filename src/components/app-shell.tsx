@@ -112,7 +112,13 @@ export function AppShell({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2"
+          // touch-manipulation: mobil brauzerlar (ayniqsa Chrome/Android) sahifa
+          // TEPASIDAGI elementlarda tortib-yangilash (pull-to-refresh) yoki
+          // qo'sh-teginish kattalashtirishni aniqlash uchun tegishni biroz
+          // KECHIKTIRISHI/yutib yuborishi mumkin — shu sabab bosh menyu tugmasi
+          // ba'zan javob bermaydi. Bu klass brauzerga darrov "oddiy tap" deb
+          // hisoblashni buyuradi.
+          className="flex h-9 w-9 touch-manipulation items-center justify-center rounded-lg text-muted hover:bg-surface-2"
           aria-label="Menu"
         >
           {icons.menu()}
@@ -139,8 +145,9 @@ export function AppShell({
                 <span className="font-bold">{appName}</span>
               </span>
               <button
+                type="button"
                 onClick={() => setOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2"
+                className="flex h-9 w-9 touch-manipulation items-center justify-center rounded-lg text-muted hover:bg-surface-2"
                 aria-label="Close"
               >
                 {icons.close()}
