@@ -50,14 +50,25 @@ src/
 messages/             tarjima fayllari
 ```
 
+## Testlar
+
+```bash
+npm test          # bir marta (vitest run)
+npm run test:watch
+```
+
+Kritik biznes-mantiq invariantlari uchun unit testlar (`src/**/*.test.ts`):
+karobka harf/QR kodlari, o'lcham→kg/m³ hisobi, holat o'tishlari, CSV eksport.
+
 ## Bosqichlar
 
-| # | Bosqich | Holat |
-|---|---------|-------|
-| 0 | Poydevor: skelet, i18n, DB, RBAC sxemasi | 🔨 jarayonda |
-| 1 | Ma'lumotnomalar (mahsulot, ombor, kontragent) | ⬜ |
-| 2 | Ombor (kirim/chiqim/qoldiq) | ⬜ |
-| 3 | Savdo va CRM | ⬜ |
-| 4 | Moliya | ⬜ |
-| 5 | HR | ⬜ |
-| 6 | Hisobotlar | ⬜ |
+| Modul | Holat |
+|-------|-------|
+| Core — auth, RBAC, i18n, audit | ✅ |
+| CRM — mijozlar, kodlar, tariflar | ✅ |
+| WMS — qabul, karobka QR, qoldiq, scan | ✅ |
+| TMS — partiyalar, yuklash, scan, Qashqar konsolidatsiyasi | ✅ |
+| Moliya — invoys, to'lov, balans, xarajat, partiya foydasi | ✅ |
+| Dashboard va hisobotlar (CSV eksport) | ✅ |
+| Telegram bot | ⬜ (token kerak) |
+| HR | ⬜ |
