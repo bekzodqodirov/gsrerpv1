@@ -46,12 +46,12 @@ const SIZES: Size[] = [
 function metrics(s: Size) {
   const ch = s.ch;
   const cw = s.cw;
-  const hA = ch * 0.14; // sklad + qabul sanasi + tartib
-  const hB = ch * 0.3; // CLIENT-HARF (asosiy)
-  const hD = ch * 0.16; // unikal karobka ID
+  const hA = ch * 0.12; // sklad + qabul sanasi + tartib
+  const hB = ch * 0.26; // CLIENT-HARF (asosiy)
+  const hD = ch * 0.14; // unikal karobka ID
   const hC = ch - hA - hB - hD; // QR + tovar nomi (qolgan joy — QR shu yerda kattalashadi)
-  const padX = cw * 0.06;
-  const qr = Math.min(hC * 0.92, cw * 0.5);
+  const padX = cw * 0.05;
+  const qr = Math.min(hC * 0.96, cw * 0.55);
   return { ch, cw, hA, hB, hC, hD, padX, qr };
 }
 
@@ -85,7 +85,7 @@ function buildCss(s: Size): string {
 /* 3-zona: QR (chapda) + tovar nomi (o'ngda) */
 .lbl-mid { height:${m.hC}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; align-items:center; gap:${m.padX}mm; padding:0 ${m.padX}mm; }
 .lbl-qr { width:${m.qr}mm; height:${m.qr}mm; flex:none; }
-.lbl-prod { flex:1; min-width:0; max-height:100%; font-size:${Math.min(m.hC * 0.24, m.cw * 0.09)}mm; font-weight:600; color:#333; line-height:1.2; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.lbl-prod { flex:1; min-width:0; max-height:100%; font-size:${Math.min(m.hC * 0.28, m.cw * 0.105)}mm; font-weight:700; color:#000; line-height:1.15; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 
 /* 4-zona: unikal karobka ID — qora chiziqda, HAR DOIM bitta qatorda */
 .lbl-foot { height:${m.hD}mm; flex:0 0 auto; box-sizing:border-box; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#000; padding:0 ${m.cw * 0.03}mm; }

@@ -25,6 +25,14 @@ export default async function TmsPage() {
   const canManage =
     !!session &&
     (session.perms.includes("*") || session.perms.includes("tms.manage"));
+  const canLoad =
+    canManage || !!session?.perms.includes("tms.load");
+  // Scan tugmasi: yuklash bosqichida FAQAT plan tuzilgan bo'lsa (aks holda
+  // scan sahifasi baribir obzorga qaytaradi), tushirish bosqichida doim.
+  const showScan = (b: { status: string; cargoCount: number }) =>
+    b.status === "departed" || b.status === "arrived"
+      ? true
+      : (b.status === "planned" || b.status === "loading") && b.cargoCount > 0;
 
   const num = (n: number, d = 0) =>
     new Intl.NumberFormat(locale, { maximumFractionDigits: d }).format(n);
@@ -70,11 +78,15 @@ export default async function TmsPage() {
             <Th className="text-right">{t("weight")}</Th>
             <Th className="text-right">{t("cargos")}</Th>
             {canManage && <Th className="text-right">{t("price")}</Th>}
+            {canLoad && <Th />}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <EmptyRow colSpan={canManage ? 7 : 6} text={t("noBatches")} />
+            <EmptyRow
+              colSpan={(canManage ? 7 : 6) + (canLoad ? 1 : 0)}
+              text={t("noBatches")}
+            />
           ) : (
             rows.map((b) => (
               <TRow key={b.id}>
@@ -108,6 +120,19 @@ export default async function TmsPage() {
                     {b.agreedPrice
                       ? `${num(Number(b.agreedPrice), 2)} ${b.currency ?? ""}`
                       : "—"}
+                  </Td>
+                )}
+                {canLoad && (
+                  <Td>
+                    {showScan(b) && (
+                      <Link
+                        href={`/tms/${b.id}/scan`}
+                        className="inline-flex h-9 touch-manipulation items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-white hover:bg-primary-hover"
+                      >
+                        {icons.qr("h-4 w-4")}
+                        {t("scanBtn")}
+                      </Link>
+                    )}
                   </Td>
                 )}
               </TRow>

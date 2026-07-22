@@ -88,7 +88,8 @@
     "sameCodeNote": "Shu tovarning barcha karobkalari shu kodga ega",
     "compressing": "Rasmlar siqilmoqda…",
     "boxLabels": "Karobka QR",
-    "labelSize": "Etiket o'lchami"
+    "labelSize": "Etiket o'lchami",
+    "lineCode": "Kod"
   },
   "cargoStatus": {
     "received_cn": "Xitoyda qabul qilindi",
@@ -304,7 +305,10 @@
     "batchCodePlaceholder": "masalan: KA-15-IYUL (bo'sh — avtomatik)",
     "codeTaken": "Bu partiya nomi band — boshqasini yozing",
     "scan_quota_full": "PLAN TO'LDI — bu tovardan ortiqcha. Logist plandagi sonni oshirsagina o'tadi",
-    "cameraHttps": "Kamera faqat HTTPS'da ishlaydi. Serverni `npm run dev:https` bilan oching yoki qo'l skaneridan foydalaning"
+    "cameraHttps": "Kamera faqat HTTPS'da ishlaydi. Serverni `npm run dev:https` bilan oching yoki qo'l skaneridan foydalaning",
+    "planTitle": "Yuklash plani",
+    "currentPlan": "Joriy plan",
+    "scan_wrong_warehouse": "bu sizning skladingiz uchun emas!"
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

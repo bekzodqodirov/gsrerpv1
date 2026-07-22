@@ -238,6 +238,9 @@ export function CargoForm({
     {},
   );
 
+  // Muvaffaqiyatli qabul (tashqi hodisa — server javobi) dan keyin formani
+  // tozalash: shu hodisaga sinxronlanadi.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (state.createdReg && !isEdit) {
       formRef.current?.reset();
@@ -248,6 +251,7 @@ export function CargoForm({
       setResetKey((k) => k + 1);
     }
   }, [state.createdReg, isEdit]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   /**
    * Yuborish: rasmlarni brauzerda siqib, FormData ni qo'lda yig'amiz.

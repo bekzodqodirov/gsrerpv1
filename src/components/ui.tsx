@@ -10,7 +10,7 @@ export function cn(...parts: Array<string | false | null | undefined>) {
 /* ─── Button ──────────────────────────────────────────────────────────── */
 
 type ButtonVariant = "primary" | "outline" | "ghost" | "danger";
-type ButtonSize = "sm" | "md";
+type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
@@ -25,6 +25,10 @@ const buttonVariants: Record<ButtonVariant, string> = {
 const buttonSizes: Record<ButtonSize, string> = {
   sm: "h-8 px-3 text-xs",
   md: "h-10 px-4 text-sm",
+  // Telefonda ishlatiladigan katta tugmalar (masalan skaner ekrani).
+  lg: "h-13 px-5 text-base",
+  // Kvadrat, faqat ikonka uchun — padding yo'q (kontent markazda).
+  icon: "h-13 w-13 text-base",
 };
 
 export function Button({

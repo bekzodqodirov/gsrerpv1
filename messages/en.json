@@ -88,7 +88,8 @@
     "sameCodeNote": "All boxes of this product share this same code",
     "compressing": "Compressing…",
     "boxLabels": "Box QR",
-    "labelSize": "Label size"
+    "labelSize": "Label size",
+    "lineCode": "Code"
   },
   "cargoStatus": {
     "received_cn": "Received in China",
@@ -304,7 +305,10 @@
     "batchCodePlaceholder": "e.g. KA-JUL-15 (empty = auto)",
     "codeTaken": "This batch name is taken",
     "scan_quota_full": "QUOTA FULL — extra box of this product. Increase the plan to load more",
-    "cameraHttps": "Camera requires HTTPS. Start with `npm run dev:https` or use a handheld scanner"
+    "cameraHttps": "Camera requires HTTPS. Start with `npm run dev:https` or use a handheld scanner",
+    "planTitle": "Loading plan",
+    "currentPlan": "Current plan",
+    "scan_wrong_warehouse": "not for your warehouse!"
   },
   "batchStatus": {
     "planned": "Planned",

@@ -29,10 +29,12 @@ export function AppShell({
   const locale = useLocale();
   const [open, setOpen] = useState(false);
 
-  // Sahifa almashganda mobil menyuni yopamiz
+  // Sahifa almashganda (tashqi navigatsiya hodisasi) mobil menyuni yopamiz.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);

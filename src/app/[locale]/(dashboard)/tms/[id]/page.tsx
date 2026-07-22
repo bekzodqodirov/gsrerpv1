@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/routing";
-import { getBatch, getAvailableLines } from "@/modules/tms/service";
+import { getBatch } from "@/modules/tms/service";
 import { batchStatusColors } from "@/components/batch-status";
 import {
   Card,
@@ -24,12 +24,12 @@ import {
   closeAction,
 } from "../actions";
 import { PrintButton } from "./print-button";
-import { ScanPanel } from "./scan-panel";
 import { DepartPartial } from "./depart-partial";
-import { PlanBuilder } from "./plan-builder";
-import { PlanLineControls } from "./plan-line-controls";
 import { AutoRefresh } from "./auto-refresh";
+import { FillBar } from "./fill-bar";
 
+// Partiya OBZORI — holat, progress va boshqaruv. Ish sahifalari alohida:
+//   /tms/[id]/plan — plan tuzish,  /tms/[id]/scan — telefonda skanerlash.
 export default async function BatchDetailPage({
   params,
 }: {
@@ -53,6 +53,8 @@ export default async function BatchDetailPage({
     totals,
     canManage,
     canLoad,
+    canScanLoad,
+    canScanUnload,
     loadProgress,
     unloadProgress,
     missingCount,
@@ -65,10 +67,14 @@ export default async function BatchDetailPage({
   const unloadable = batch.status === "departed" || batch.status === "arrived";
   const loadComplete =
     loadProgress.total > 0 && loadProgress.done >= loadProgress.total;
-  const available = editable && canLoad ? await getAvailableLines(id) : [];
 
   const capKg = carrier?.capacityKg ? Number(carrier.capacityKg) : null;
   const capM3 = carrier?.capacityM3 ? Number(carrier.capacityM3) : null;
+
+  const scanProg = unloadable ? unloadProgress : loadProgress;
+  const scanPct = scanProg.total
+    ? Math.min(100, (scanProg.done / scanProg.total) * 100)
+    : 0;
 
   const partialItems = lines
     .filter((l) => l.loaded < l.planned)
@@ -82,7 +88,7 @@ export default async function BatchDetailPage({
   return (
     <div className="space-y-4">
       {/* Ishchilar scan qilganda sahifa jonli yangilanib turadi */}
-      {(editable || unloadable) && canLoad && <AutoRefresh seconds={8} />}
+      {(editable || unloadable) && canLoad && <AutoRefresh seconds={10} />}
 
       {/* ─── Sarlavha ─── */}
       <div className="print:hidden">
@@ -132,10 +138,67 @@ export default async function BatchDetailPage({
             </div>
           )}
         </div>
+      </Card>
 
-        {/* ─── Holat amallari ─── */}
-        {canLoad && (
-          <div className="mt-4 flex flex-wrap gap-2 print:hidden">
+      {/* ─── Ish sahifalari: SKANERLASH (asosiy) va PLAN — katta, alohida ───
+          Scan tile'i faqat mos tomonda: yuklash — jo'natuvchi ombor xodimiga,
+          tushirish — qabul qiluvchinikiga. */}
+      {canLoad && (editable || unloadable) && (
+        <div className="grid gap-3 sm:grid-cols-2 print:hidden">
+          {(unloadable
+            ? canScanUnload
+            : editable && loadProgress.total > 0 && canScanLoad) && (
+            <Link
+              href={`/tms/${id}/scan`}
+              className="group flex touch-manipulation items-center gap-4 rounded-xl bg-primary p-4 text-white shadow-sm transition-colors hover:bg-primary-hover"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                {icons.qr("h-6 w-6")}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-bold">
+                  {unloadable ? t("scanUnload") : t("scanLoad")}
+                </span>
+                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/25">
+                  <span
+                    className="block h-full rounded-full bg-white"
+                    style={{ width: `${scanPct}%` }}
+                  />
+                </span>
+              </span>
+              <span className="font-mono text-lg font-black tabular-nums">
+                {scanProg.done}/{scanProg.total}
+              </span>
+            </Link>
+          )}
+          {editable && (
+            <Link
+              href={`/tms/${id}/plan`}
+              className="group flex touch-manipulation items-center gap-4 rounded-xl border border-line bg-surface p-4 shadow-sm transition-colors hover:bg-surface-2"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                {icons.stock("h-6 w-6")}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-bold">{t("planTitle")}</span>
+                <span className="block text-sm text-muted">
+                  {num(totals.lineCount)} {t("products").toLowerCase()} ·{" "}
+                  {num(totals.totalBoxes)} {t("boxesShort")}
+                </span>
+              </span>
+              <span className="text-muted transition-transform group-hover:translate-x-0.5">
+                →
+              </span>
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* ─── Holat amallari ─── (yopiq/yakunlangan partiyada bo'sh karta chiqmasin) */}
+      {canLoad &&
+        (editable || unloadable || (batch.status === "unloaded" && canManage)) && (
+        <Card className="p-4 print:hidden">
+          <div className="flex flex-wrap gap-2">
             {batch.status === "planned" && (
               <ActionForm action={startLoadingAction.bind(null, id)} label={t("startLoading")} variant="outline" />
             )}
@@ -173,8 +236,14 @@ export default async function BatchDetailPage({
               <ActionForm action={closeAction.bind(null, id)} label={t("close")} variant="outline" />
             )}
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
+
+      {missingCount > 0 && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300 print:hidden">
+          ⚠ {t("missingBoxes", { n: missingCount })}
+        </div>
+      )}
 
       {/* ─── Sig'im to'ldirilishi (plan bo'yicha) ─── */}
       {carrier && (capKg || capM3) && (
@@ -182,48 +251,13 @@ export default async function BatchDetailPage({
           <div className="mb-2 text-sm font-semibold text-muted">{t("capacity")}</div>
           <div className="space-y-3">
             {capKg && (
-              <FillBar
-                label={t("weight")}
-                value={totals.totalWeightKg}
-                max={capKg}
-                unit="kg"
-                num={num}
-              />
+              <FillBar label={t("weight")} value={totals.totalWeightKg} max={capKg} unit="kg" num={num} />
             )}
             {capM3 && (
-              <FillBar
-                label={t("volume")}
-                value={totals.totalVolumeM3}
-                max={capM3}
-                unit="m³"
-                num={num}
-              />
+              <FillBar label={t("volume")} value={totals.totalVolumeM3} max={capM3} unit="m³" num={num} />
             )}
           </div>
         </Card>
-      )}
-
-      {/* ─── Karobka scan (yuklash / tushirish) ─── */}
-      {editable && canLoad && loadProgress.total > 0 && (
-        <ScanPanel
-          batchId={id}
-          mode="load"
-          done={loadProgress.done}
-          total={loadProgress.total}
-        />
-      )}
-      {unloadable && canLoad && (
-        <ScanPanel
-          batchId={id}
-          mode="unload"
-          done={unloadProgress.done}
-          total={unloadProgress.total}
-        />
-      )}
-      {missingCount > 0 && (
-        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300 print:hidden">
-          ⚠ {t("missingBoxes", { n: missingCount })}
-        </div>
       )}
 
       {/* ─── Jamlar (plan) ─── */}
@@ -285,12 +319,11 @@ export default async function BatchDetailPage({
               <Th className="text-right">{t("remainingCol")}</Th>
               <Th className="text-right">{t("weight")}</Th>
               <Th className="text-right">{t("volume")}</Th>
-              {editable && canLoad && <Th className="w-24 print:hidden" />}
             </tr>
           </thead>
           <tbody>
             {lines.length === 0 ? (
-              <EmptyRow colSpan={editable && canLoad ? 9 : 8} text={t("noCargo")} />
+              <EmptyRow colSpan={8} text={t("noCargo")} />
             ) : (
               lines.map((l) => {
                 const remaining = Math.max(0, l.planned - l.loaded);
@@ -364,16 +397,6 @@ export default async function BatchDetailPage({
                     <Td className="text-right font-mono text-xs tabular-nums">
                       {num(l.plannedM3, 2)}
                     </Td>
-                    {editable && canLoad && (
-                      <Td className="print:hidden">
-                        <PlanLineControls
-                          batchId={id}
-                          lineId={l.lineId}
-                          planned={l.planned}
-                          loaded={l.loaded}
-                        />
-                      </Td>
-                    )}
                   </TRow>
                 );
               })
@@ -381,25 +404,11 @@ export default async function BatchDetailPage({
           </tbody>
         </TableWrap>
       </div>
-
-      {/* ─── Plan tuzuvchi: ombordagi tovarlar (rasm/nom/o'lchamlar bilan) ─── */}
-      {editable && canLoad && (
-        <div className="print:hidden">
-          <PlanBuilder
-            batchId={id}
-            lines={available}
-            planKg={totals.totalWeightKg}
-            planM3={totals.totalVolumeM3}
-            capKg={capKg}
-            capM3={capM3}
-          />
-        </div>
-      )}
     </div>
   );
 }
 
-/* ─── Kichik yordamchi komponentlar ─── */
+/* ─── Kichik yordamchi komponent ─── */
 
 function ActionForm({
   action,
@@ -418,38 +427,5 @@ function ActionForm({
         {label}
       </Button>
     </form>
-  );
-}
-
-function FillBar({
-  label,
-  value,
-  max,
-  unit,
-  num,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  unit: string;
-  num: (n: number, d?: number) => string;
-}) {
-  const pct = Math.min(100, (value / max) * 100);
-  const over = value > max;
-  return (
-    <div>
-      <div className="mb-1 flex justify-between text-xs">
-        <span className="text-muted">{label}</span>
-        <span className={"font-mono tabular-nums " + (over ? "text-red-600 font-semibold" : "text-foreground")}>
-          {num(value, 1)} / {num(max, 1)} {unit} · {Math.round(pct)}%
-        </span>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-surface-2">
-        <div
-          className={"h-full rounded-full " + (over ? "bg-red-500" : pct > 85 ? "bg-amber-500" : "bg-emerald-500")}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
   );
 }

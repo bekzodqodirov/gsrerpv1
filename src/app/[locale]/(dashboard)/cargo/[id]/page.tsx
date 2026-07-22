@@ -91,6 +91,7 @@ export default async function CargoDetailPage({
         <thead className="bg-surface-2/60">
           <tr>
             <Th>#</Th>
+            <Th>{t("lineCode")}</Th>
             <Th>{t("product")}</Th>
             <Th className="text-right">{t("boxCount")}</Th>
             <Th>{t("boxDims")}</Th>
@@ -107,6 +108,11 @@ export default async function CargoDetailPage({
             return (
             <TRow key={l.id}>
               <Td className="text-muted">{l.lineNo}</Td>
+              <Td>
+                <span className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-sm font-black text-primary">
+                  {clientCode}-{l.letterCode}
+                </span>
+              </Td>
               <Td className="font-medium">{l.productName}</Td>
               <Td className="text-right font-mono tabular-nums">{l.boxCount}</Td>
               <Td className="font-mono text-muted tabular-nums">

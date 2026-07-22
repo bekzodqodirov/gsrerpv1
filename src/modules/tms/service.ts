@@ -176,16 +176,34 @@ export async function createBatch(input: BatchCreateInput) {
   return b;
 }
 
-/** Partiyalar ro'yxati. Sklad xodimiga faqat o'z omboriga tegishlilari. */
+/** Partiyalar ro'yxati. Sklad XODIMIGA faqat o'z omboriga tegishlilari —
+ * va faqat HOZIR ish talab qiladiganlari: o'zidan chiqadigan (planned/loading,
+ * yuklash ketyapti) yoki o'ziga kelayotgan (departed/arrived, tushirish
+ * kutilyapti). Jo'nab ketgan/yopilgan partiya skladchiga endi kerak emas.
+ * Skladga biriktirilgan MENEJER (tms.manage) esa o'z omborining BARCHA
+ * partiyalarini ko'radi — unloaded'ni yopish (closeBatch) uning vazifasi. */
 export async function listBatches() {
   const session = await requirePermission("tms.view");
+  const isManager =
+    session.perms.includes("*") || session.perms.includes("tms.manage");
   const conds = [];
   if (session.warehouseId) {
     conds.push(
-      or(
-        eq(batches.originWarehouseId, session.warehouseId),
-        eq(batches.destinationWarehouseId, session.warehouseId),
-      )!,
+      isManager
+        ? or(
+            eq(batches.originWarehouseId, session.warehouseId),
+            eq(batches.destinationWarehouseId, session.warehouseId),
+          )!
+        : or(
+            and(
+              eq(batches.originWarehouseId, session.warehouseId),
+              inArray(batches.status, ["planned", "loading"]),
+            ),
+            and(
+              eq(batches.destinationWarehouseId, session.warehouseId),
+              inArray(batches.status, ["departed", "arrived"]),
+            ),
+          )!,
     );
   }
   const rows = await db
@@ -469,6 +487,74 @@ export async function getBatch(id: string) {
       session.perms.includes("*") ||
       session.perms.includes("tms.load") ||
       session.perms.includes("tms.manage"),
+    // Tomonga bog'liq: yuklash — jo'natuvchi omborda, tushirish — qabul qiluvchida.
+    canScanLoad:
+      (session.perms.includes("*") ||
+        session.perms.includes("tms.load") ||
+        session.perms.includes("tms.manage")) &&
+      (!session.warehouseId || session.warehouseId === b.originWarehouseId),
+    canScanUnload:
+      (session.perms.includes("*") ||
+        session.perms.includes("tms.load") ||
+        session.perms.includes("tms.manage")) &&
+      (!session.warehouseId || session.warehouseId === b.destinationWarehouseId),
+  };
+}
+
+/** Skaner ekrani uchun YENGIL ma'lumot: partiya + progress. Manifest, plan,
+ * rasmlar va ishchilar hisobisiz — telefonda sahifa tez ochilishi uchun. */
+export async function getBatchScanInfo(id: string) {
+  const session = await requirePermission("tms.view");
+
+  const b = await db.query.batches.findFirst({ where: eq(batches.id, id) });
+  if (!b) return null;
+  if (
+    session.warehouseId &&
+    b.originWarehouseId !== session.warehouseId &&
+    b.destinationWarehouseId !== session.warehouseId
+  ) {
+    return null;
+  }
+
+  const [origin, dest, plannedRow, scanRow] = await Promise.all([
+    db.query.warehouses.findFirst({ where: eq(warehouses.id, b.originWarehouseId) }),
+    db.query.warehouses.findFirst({ where: eq(warehouses.id, b.destinationWarehouseId) }),
+    db
+      .select({
+        total: sql<number>`coalesce(sum(${batchLines.plannedBoxes}), 0)::int`,
+      })
+      .from(batchLines)
+      .where(eq(batchLines.batchId, id)),
+    db
+      .select({
+        loaded: sql<number>`count(*) filter (where ${batchBoxes.loadedScan})::int`,
+        unloaded: sql<number>`count(*) filter (where ${batchBoxes.unloadedScan})::int`,
+        total: sql<number>`count(*)::int`,
+      })
+      .from(batchBoxes)
+      .where(eq(batchBoxes.batchId, id)),
+  ]);
+
+  const hasLoadPerm =
+    session.perms.includes("*") ||
+    session.perms.includes("tms.load") ||
+    session.perms.includes("tms.manage");
+
+  return {
+    batch: { id: b.id, code: b.code, status: b.status },
+    origin: origin ? { gsCode: origin.gsCode, name: origin.name } : null,
+    dest: dest ? { gsCode: dest.gsCode, name: dest.name } : null,
+    loadProgress: { done: scanRow[0]?.loaded ?? 0, total: plannedRow[0]?.total ?? 0 },
+    unloadProgress: { done: scanRow[0]?.unloaded ?? 0, total: scanRow[0]?.total ?? 0 },
+    canLoad: hasLoadPerm,
+    // Tomonga bog'liq ruxsat: yuklash — faqat jo'natuvchi omborda, tushirish —
+    // faqat qabul qiluvchi omborda (scanLoad/scanUnload ham shuni talab qiladi).
+    canScanLoad:
+      hasLoadPerm &&
+      (!session.warehouseId || session.warehouseId === b.originWarehouseId),
+    canScanUnload:
+      hasLoadPerm &&
+      (!session.warehouseId || session.warehouseId === b.destinationWarehouseId),
   };
 }
 

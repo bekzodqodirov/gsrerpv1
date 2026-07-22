@@ -174,6 +174,15 @@ export async function closeAction(batchId: string) {
 
 // ─── Scan (yuklash / tushirish) ──────────────────────────────────────────────
 
+/** Sklad tomoni mos kelmasa (masalan jo'natuvchi omborchi tushirish scanini
+ * ochsa) service FORBIDDEN_WAREHOUSE tashlaydi — sahifani qulatmasdan
+ * skanerda tushunarli natija sifatida ko'rsatamiz. */
+function scanErrorResult(e: unknown, code: string): ScanResult {
+  const msg = e instanceof Error ? e.message : "";
+  if (msg === "FORBIDDEN_WAREHOUSE") return { outcome: "wrong_warehouse", code };
+  throw e;
+}
+
 export async function scanLoadAction(
   batchId: string,
   _prev: ScanResult | null,
@@ -182,9 +191,13 @@ export async function scanLoadAction(
   const code = String(formData.get("code") ?? "");
   const parsed = scanSchema.safeParse({ code });
   if (!parsed.success) return { outcome: "unknown", code };
-  const res = await scanLoad(batchId, parsed.data.code);
-  revalidateTms();
-  return res;
+  try {
+    const res = await scanLoad(batchId, parsed.data.code);
+    revalidateTms();
+    return res;
+  } catch (e) {
+    return scanErrorResult(e, code);
+  }
 }
 
 export async function scanUnloadAction(
@@ -195,9 +208,13 @@ export async function scanUnloadAction(
   const code = String(formData.get("code") ?? "");
   const parsed = scanSchema.safeParse({ code });
   if (!parsed.success) return { outcome: "unknown", code };
-  const res = await scanUnload(batchId, parsed.data.code);
-  revalidateTms();
-  return res;
+  try {
+    const res = await scanUnload(batchId, parsed.data.code);
+    revalidateTms();
+    return res;
+  } catch (e) {
+    return scanErrorResult(e, code);
+  }
 }
 
 /** Scan-to-add: "planga qo'shish" tugmasi — tovarni qo'shadi va darhol scan qiladi. */
@@ -208,7 +225,11 @@ export async function addLineAndScanAction(
 ): Promise<ScanResult> {
   const parsed = scanSchema.safeParse({ code });
   if (!parsed.success) return { outcome: "unknown", code };
-  const res = await addLineAndScanLoad(batchId, lineId, parsed.data.code);
-  revalidateTms();
-  return res;
+  try {
+    const res = await addLineAndScanLoad(batchId, lineId, parsed.data.code);
+    revalidateTms();
+    return res;
+  } catch (e) {
+    return scanErrorResult(e, code);
+  }
 }

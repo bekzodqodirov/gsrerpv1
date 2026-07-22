@@ -88,7 +88,8 @@
     "sameCodeNote": "Все коробки этого товара имеют этот же код",
     "compressing": "Сжатие фото…",
     "boxLabels": "QR коробок",
-    "labelSize": "Размер этикетки"
+    "labelSize": "Размер этикетки",
+    "lineCode": "Код"
   },
   "cargoStatus": {
     "received_cn": "Принят в Китае",
@@ -304,7 +305,10 @@
     "batchCodePlaceholder": "например: KA-15-ИЮЛЬ (пусто — авто)",
     "codeTaken": "Это название занято — введите другое",
     "scan_quota_full": "ПЛАН ЗАПОЛНЕН — лишняя коробка этого товара. Пройдёт только если логист увеличит план",
-    "cameraHttps": "Камера работает только по HTTPS. Запустите `npm run dev:https` или используйте ручной сканер"
+    "cameraHttps": "Камера работает только по HTTPS. Запустите `npm run dev:https` или используйте ручной сканер",
+    "planTitle": "План погрузки",
+    "currentPlan": "Текущий план",
+    "scan_wrong_warehouse": "не для вашего склада!"
   },
   "batchStatus": {
     "planned": "Запланирована",

@@ -56,7 +56,8 @@ export type ScanOutcome =
   | "quota_full" //  bu tovarning plan kvotasi to'lgan — sabab ko'rsatib rad
   | "extra" //       manifestda yo'q karobka tushirildi (ortiqcha)
   | "unknown" //     bunday QR umuman topilmadi
-  | "wrong_status"; // partiya holati scan qilishga mos emas
+  | "wrong_status" // partiya holati scan qilishga mos emas
+  | "wrong_warehouse"; // bu amal foydalanuvchining omboriga tegishli emas
 
 export type ScanResult = {
   outcome: ScanOutcome;

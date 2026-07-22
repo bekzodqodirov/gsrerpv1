@@ -1,24 +1,24 @@
 "use client";
 
+// Skladchi uchun TELEFONGA mo'ljallangan skaner ekrani: katta kamera oynasi,
+// katta progress, katta tugmalar — boshqa hech narsa. Plan/manifest/statistika
+// obzor va plan sahifalarida qoladi.
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import jsQR from "jsqr";
-import { Card, Button } from "@/components/ui";
+import { Link } from "@/i18n/routing";
+import { Button } from "@/components/ui";
 import { icons } from "@/components/icons";
 import type { ScanResult } from "@/modules/tms/dto";
 import {
   scanLoadAction,
   scanUnloadAction,
   addLineAndScanAction,
-} from "../actions";
+} from "../../actions";
 
 type Mode = "load" | "unload";
 
-// Natija turiga qarab rang va "ijobiy"lik (ovoz uchun).
-const OUTCOME_STYLE: Record<
-  string,
-  { cls: string; good: boolean }
-> = {
+const OUTCOME_STYLE: Record<string, { cls: string; good: boolean }> = {
   loaded: { cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100", good: true },
   unloaded: { cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100", good: true },
   duplicate: { cls: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100", good: false },
@@ -28,6 +28,7 @@ const OUTCOME_STYLE: Record<
   extra: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
   unknown: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
   wrong_status: { cls: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200", good: false },
+  wrong_warehouse: { cls: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100", good: false },
 };
 
 function beep(good: boolean) {
@@ -46,7 +47,6 @@ function beep(good: boolean) {
   } catch {
     /* ovoz ixtiyoriy */
   }
-  // Telefonda his qilinadigan javob: muvaffaqiyat — qisqa, xato — uzunroq.
   try {
     navigator.vibrate?.(good ? 80 : [80, 60, 160]);
   } catch {
@@ -54,16 +54,23 @@ function beep(good: boolean) {
   }
 }
 
-export function ScanPanel({
+// Kamera afzalligi telefonda eslab qolinadi (standart: YOQIQ).
+const CAM_PREF_KEY = "gsr_scan_cam";
+
+export function ScanScreen({
   batchId,
   mode,
   done,
   total,
+  batchCode,
+  routeLabel,
 }: {
   batchId: string;
   mode: Mode;
   done: number;
   total: number;
+  batchCode: string;
+  routeLabel: string;
 }) {
   const t = useTranslations("tms");
   const action = mode === "load" ? scanLoadAction : scanUnloadAction;
@@ -78,24 +85,31 @@ export function ScanPanel({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [camOn, setCamOn] = useState(false);
   const [camErr, setCamErr] = useState<string | null>(null);
-  // "Planga qo'shish" natijasi — qaysi scan javobiga tegishliligi bilan birga
-  // saqlanadi: yangi scan kelsa (state almashsa) o'z-o'zidan eskiradi.
   const [override, setOverride] = useState<{
     base: ScanResult;
     result: ScanResult;
   } | null>(null);
   const [adding, setAdding] = useState(false);
-  // Katta ✓/✗ flash — ishchi uzoqdan ham natijani ko'rsin (1 soniya).
   const [flash, setFlash] = useState<ScanResult | null>(null);
   const lastScan = useRef<{ code: string; at: number }>({ code: "", at: 0 });
 
-  function showResult(r: ScanResult) {
-    beep(OUTCOME_STYLE[r.outcome]?.good ?? false);
-    setFlash(r);
+  // Ekran ochilishi bilan kamerani avtomatik yoqamiz (skladchi telefonda) —
+  // faqat foydalanuvchi oldin o'zi o'chirmagan bo'lsa.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (localStorage.getItem(CAM_PREF_KEY) !== "0") setCamOn(true);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  function toggleCam() {
+    setCamErr(null);
+    setCamOn((v) => {
+      localStorage.setItem(CAM_PREF_KEY, v ? "0" : "1");
+      return !v;
+    });
   }
 
   // Har javobdan keyin ovoz + flash + inputni tozalab, fokusni qaytaramiz.
-  // (Scan natijasi — tashqi hodisa; flash shu hodisaga sinxronlanadi.)
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!state) return;
@@ -106,7 +120,6 @@ export function ScanPanel({
   }, [state]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Flash o'z-o'zidan yopiladi.
   useEffect(() => {
     if (!flash) return;
     const tm = setTimeout(() => setFlash(null), 1200);
@@ -119,7 +132,8 @@ export function ScanPanel({
     try {
       const r = await addLineAndScanAction(batchId, res.lineId, res.code);
       setOverride({ base: res, result: r });
-      showResult(r);
+      beep(OUTCOME_STYLE[r.outcome]?.good ?? false);
+      setFlash(r);
     } finally {
       setAdding(false);
       inputRef.current?.focus();
@@ -135,8 +149,6 @@ export function ScanPanel({
 
     (async () => {
       try {
-        // HTTPS bo'lmagan (masalan LAN IP) sahifada brauzer kamerani BERMAYDI —
-        // aniq sabab ko'rsatamiz (aks holda jim ishlamay qo'yadi).
         if (!navigator.mediaDevices?.getUserMedia) {
           setCamErr(t("cameraHttps"));
           setCamOn(false);
@@ -194,38 +206,60 @@ export function ScanPanel({
   const complete = shownTotal > 0 && shownDone >= shownTotal;
 
   return (
-    <Card className="p-4 print:hidden">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">
-          {mode === "load" ? t("scanLoad") : t("scanUnload")}
-        </h2>
-        <span
-          className={
-            "font-mono text-sm font-bold tabular-nums " +
-            (complete ? "text-emerald-600" : "text-foreground")
-          }
-        >
-          {shownDone} / {shownTotal}
-        </span>
+    <div className="mx-auto flex max-w-lg flex-col gap-3">
+      {/* Yopishqoq sarlavha: partiya + KATTA progress */}
+      <div className="sticky top-0 z-10 -mx-1 rounded-b-xl bg-background/95 px-1 pt-1 pb-2 backdrop-blur">
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href={`/tms/${batchId}`}
+            className="inline-flex touch-manipulation items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-foreground"
+          >
+            ← <span className="font-mono font-bold">{batchCode}</span>
+          </Link>
+          <span className="truncate text-xs text-muted">{routeLabel}</span>
+          <span
+            className={
+              "font-mono text-2xl font-black tabular-nums " +
+              (complete ? "text-emerald-600" : "text-foreground")
+            }
+          >
+            {shownDone}/{shownTotal}
+          </span>
+        </div>
+        <div className="mt-1.5 h-3 overflow-hidden rounded-full bg-surface-2">
+          <div
+            className={
+              "h-full rounded-full transition-all " +
+              (complete ? "bg-emerald-500" : "bg-primary")
+            }
+            style={{ width: `${pct}%` }}
+          />
+        </div>
       </div>
 
-      {/* progress */}
-      <div className="mb-3 h-2.5 overflow-hidden rounded-full bg-surface-2">
-        <div
-          className={"h-full rounded-full transition-all " + (complete ? "bg-emerald-500" : "bg-primary")}
-          style={{ width: `${pct}%` }}
-        />
+      <div className="text-center text-sm font-semibold text-muted">
+        {mode === "load" ? t("scanLoad") : t("scanUnload")}
       </div>
 
-      {/* kamera */}
+      {/* Kamera — ekranning asosiy qismi */}
       {camOn && (
-        <div className="mb-3 overflow-hidden rounded-lg border border-line">
-          <video ref={videoRef} className="w-full max-h-64 object-cover" muted playsInline />
+        <div className="overflow-hidden rounded-2xl border-2 border-primary/40 shadow-sm">
+          <video
+            ref={videoRef}
+            className="max-h-[48vh] w-full object-cover"
+            muted
+            playsInline
+          />
         </div>
       )}
       <canvas ref={canvasRef} className="hidden" />
+      {camErr && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          {camErr}
+        </p>
+      )}
 
-      {/* skaner / qo'lda kiritish */}
+      {/* Qo'lda kiritish / barcode-skaner + kamera tugmasi */}
       <form ref={formRef} action={formAction} className="flex gap-2">
         <input
           ref={inputRef}
@@ -233,44 +267,42 @@ export function ScanPanel({
           autoFocus
           autoComplete="off"
           placeholder={t("scanPlaceholder")}
-          className="h-11 flex-1 rounded-lg border border-line bg-surface px-3 font-mono text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+          className="h-13 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 font-mono text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
         />
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" size="lg" disabled={pending}>
           {t("scanBtn")}
         </Button>
         <Button
           type="button"
-          variant="outline"
-          onClick={() => {
-            setCamErr(null);
-            setCamOn((v) => !v);
-          }}
+          size="icon"
+          variant={camOn ? "primary" : "outline"}
+          onClick={toggleCam}
           title={t("camera")}
         >
-          {icons.camera("h-5 w-5")}
+          {icons.camera("h-6 w-6")}
         </Button>
       </form>
 
-      {camErr && <p className="mt-2 text-xs text-red-600">{camErr}</p>}
-
-      {/* oxirgi natija */}
+      {/* Oxirgi natija */}
       {shown && (
         <div
           className={
-            "mt-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium " +
+            "flex flex-wrap items-center gap-2 rounded-xl px-4 py-3 text-base font-semibold " +
             (OUTCOME_STYLE[shown.outcome]?.cls ?? "")
           }
         >
           <span className="font-mono text-xs">{shown.code}</span>
           <span>— {t(("scan_" + shown.outcome) as "scan_loaded")}</span>
-          {shown.label && <span className="ml-auto text-xs opacity-80">{shown.label}</span>}
+          {shown.label && (
+            <span className="ml-auto text-sm font-medium opacity-80">{shown.label}</span>
+          )}
           {shown.outcome === "can_add" && shown.cargoId && (
             <Button
               type="button"
-              size="sm"
+              size="lg"
               onClick={() => handleAddToPlan(shown)}
               disabled={adding}
-              className="ml-auto"
+              className="ml-auto w-full"
             >
               {adding ? "…" : t("addToPlan")}
             </Button>
@@ -278,7 +310,7 @@ export function ScanPanel({
         </div>
       )}
 
-      <p className="mt-2 text-xs text-muted">{t("scanHint")}</p>
+      <p className="text-center text-xs text-muted">{t("scanHint")}</p>
 
       {/* Katta natija flash'i — uzoqdan ko'rinadi (✓ yashil / ✗ qizil) */}
       {flash && (
@@ -302,6 +334,6 @@ export function ScanPanel({
           <span className="mt-1 font-mono text-xs text-white/75">{flash.code}</span>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

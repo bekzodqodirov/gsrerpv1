@@ -80,6 +80,7 @@ function LineDetails({ row }: { row: Row }) {
           <thead>
             <tr className="text-left text-[11px] font-semibold tracking-wider text-muted uppercase">
               <th className="px-2 py-1.5">{t("photo")}</th>
+              <th className="px-2 py-1.5">{t("lineCode")}</th>
               <th className="px-2 py-1.5">{t("product")}</th>
               <th className="px-2 py-1.5 text-right">{t("boxCount")}</th>
               <th className="px-2 py-1.5">{t("boxDims")}</th>
@@ -105,6 +106,14 @@ function LineDetails({ row }: { row: Row }) {
                         {icons.camera("h-4 w-4")}
                       </span>
                     )}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span
+                      className="rounded-md bg-primary-soft px-2 py-0.5 font-mono text-sm font-black whitespace-nowrap text-primary"
+                      title={code}
+                    >
+                      {row.clientCode}-{l.letterCode}
+                    </span>
                   </td>
                   <td className="px-2 py-1.5 font-medium">{l.productName}</td>
                   <td className="px-2 py-1.5 text-right font-mono tabular-nums">

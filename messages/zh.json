@@ -88,7 +88,8 @@
     "sameCodeNote": "该商品的所有箱子共用此编码",
     "compressing": "正在压缩…",
     "boxLabels": "箱码",
-    "labelSize": "标签尺寸"
+    "labelSize": "标签尺寸",
+    "lineCode": "编号"
   },
   "cargoStatus": {
     "received_cn": "中国仓已收货",
@@ -304,7 +305,10 @@
     "batchCodePlaceholder": "例如 KA-0715（留空自动）",
     "codeTaken": "该批次名称已被占用",
     "scan_quota_full": "计划已满 — 该商品超额。物流员提高计划数量后方可装载",
-    "cameraHttps": "相机仅支持 HTTPS。请用 `npm run dev:https` 启动或使用手持扫描枪"
+    "cameraHttps": "相机仅支持 HTTPS。请用 `npm run dev:https` 启动或使用手持扫描枪",
+    "planTitle": "装车计划",
+    "currentPlan": "当前计划",
+    "scan_wrong_warehouse": "不属于您的仓库！"
   },
   "batchStatus": {
     "planned": "已计划",
