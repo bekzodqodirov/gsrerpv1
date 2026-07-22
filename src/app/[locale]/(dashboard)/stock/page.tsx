@@ -15,6 +15,7 @@ import {
   EmptyRow,
 } from "@/components/ui";
 import { icons } from "@/components/icons";
+import { ExportLink } from "@/components/export-link";
 
 // Yotish muddati guruhlari uchun rang (AgeBar va badge'lar).
 const bucketColor: Record<string, string> = {
@@ -60,7 +61,9 @@ export default async function StockPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader title={t("title")} />
+      <PageHeader title={t("title")}>
+        <ExportLink type="stock" label={t("exportCsv")} />
+      </PageHeader>
       <p className="-mt-2 text-sm text-muted">{t("subtitle")}</p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

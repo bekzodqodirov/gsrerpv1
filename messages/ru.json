@@ -130,7 +130,8 @@
     "age_fresh": "0–7 дн",
     "age_warn": "8–15 дн",
     "age_old": "16–30 дн",
-    "age_critical": "30+ дн"
+    "age_critical": "30+ дн",
+    "exportCsv": "Экспорт CSV"
   },
   "tms": {
     "title": "Партии (TMS)",
@@ -303,7 +304,12 @@
     "cost": "Расход",
     "margin": "Прибыль",
     "route": "Маршрут",
-    "noProfitability": "Пока нет данных по партиям"
+    "noProfitability": "Пока нет данных по партиям",
+    "pnl": "P&L (помесячно)",
+    "pnlDesc": "Выручка и расходы по месяцам",
+    "month": "Месяц",
+    "exportCsv": "Экспорт CSV",
+    "noData": "Нет данных"
   },
   "invoiceStatus": {
     "draft": "Черновик",

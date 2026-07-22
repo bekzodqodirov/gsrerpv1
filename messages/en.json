@@ -130,7 +130,8 @@
     "age_fresh": "0–7 d",
     "age_warn": "8–15 d",
     "age_old": "16–30 d",
-    "age_critical": "30+ d"
+    "age_critical": "30+ d",
+    "exportCsv": "Export CSV"
   },
   "tms": {
     "title": "Batches (TMS)",
@@ -303,7 +304,12 @@
     "cost": "Cost",
     "margin": "Margin",
     "route": "Route",
-    "noProfitability": "No batch data yet"
+    "noProfitability": "No batch data yet",
+    "pnl": "P&L (monthly)",
+    "pnlDesc": "Revenue vs expenses by month",
+    "month": "Month",
+    "exportCsv": "Export CSV",
+    "noData": "No data"
   },
   "invoiceStatus": {
     "draft": "Draft",

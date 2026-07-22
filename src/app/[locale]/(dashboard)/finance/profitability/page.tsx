@@ -11,6 +11,7 @@ import {
   TRow,
   EmptyRow,
 } from "@/components/ui";
+import { ExportLink } from "@/components/export-link";
 
 export default async function ProfitabilityPage() {
   const locale = await getLocale();
@@ -28,7 +29,9 @@ export default async function ProfitabilityPage() {
         <Link href="/finance" className="text-sm text-muted hover:text-foreground">
           ← {t("title")}
         </Link>
-        <PageHeader title={t("profitability")} />
+        <PageHeader title={t("profitability")}>
+          <ExportLink type="profitability" label={t("exportCsv")} />
+        </PageHeader>
       </div>
       <p className="-mt-2 text-sm text-muted">{t("profitabilityHint")}</p>
 

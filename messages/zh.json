@@ -130,7 +130,8 @@
     "age_fresh": "0–7 天",
     "age_warn": "8–15 天",
     "age_old": "16–30 天",
-    "age_critical": "30+ 天"
+    "age_critical": "30+ 天",
+    "exportCsv": "导出 CSV"
   },
   "tms": {
     "title": "批次 (TMS)",
@@ -303,7 +304,12 @@
     "cost": "成本",
     "margin": "利润",
     "route": "路线",
-    "noProfitability": "暂无批次数据"
+    "noProfitability": "暂无批次数据",
+    "pnl": "损益（月度）",
+    "pnlDesc": "按月收入与支出",
+    "month": "月份",
+    "exportCsv": "导出 CSV",
+    "noData": "无数据"
   },
   "invoiceStatus": {
     "draft": "草稿",

@@ -14,6 +14,7 @@ import {
   TRow,
   EmptyRow,
 } from "@/components/ui";
+import { ExportLink } from "@/components/export-link";
 import { ExpenseForm } from "./expense-form";
 
 const CATS = ["truck", "rent", "salary", "customs", "other"] as const;
@@ -39,7 +40,9 @@ export default async function ExpensesPage() {
         <Link href="/finance" className="text-sm text-muted hover:text-foreground">
           ← {t("title")}
         </Link>
-        <PageHeader title={t("expenses")} />
+        <PageHeader title={t("expenses")}>
+          <ExportLink type="expenses" label={t("exportCsv")} />
+        </PageHeader>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

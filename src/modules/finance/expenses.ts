@@ -5,6 +5,7 @@ import {
   expenses,
   invoices,
   invoiceLines,
+  clientLedger,
   batches,
   batchCargos,
   carriers,
@@ -153,6 +154,71 @@ async function cargoRevenueUsd(
   const qty = tariff.unit === "kg" ? Number(cargo.totalWeightKg) : Number(cargo.totalVolumeM3);
   const rate = await fxToUsd(tariff.currency).catch(() => 1);
   return r2(qty * Number(tariff.rate) * rate);
+}
+
+// ─── Oylik P&L (foyda va zarar) ──────────────────────────────────────────────
+
+export type PnlMonth = {
+  month: string; // YYYY-MM
+  revenueUsd: number;
+  expenseUsd: number;
+  marginUsd: number;
+};
+
+export async function getMonthlyPnl(): Promise<{
+  rows: PnlMonth[];
+  totals: { revenueUsd: number; expenseUsd: number; marginUsd: number };
+}> {
+  await requirePermission("finance.view");
+
+  const rev = await db
+    .select({
+      month: sql<string>`to_char(${clientLedger.at}, 'YYYY-MM')`,
+      s: sql<string>`coalesce(sum(${clientLedger.amountUsd}), 0)`,
+    })
+    .from(clientLedger)
+    .where(eq(clientLedger.type, "charge"))
+    .groupBy(sql`to_char(${clientLedger.at}, 'YYYY-MM')`);
+
+  const exp = await db
+    .select({
+      month: sql<string>`to_char(${expenses.spentAt}, 'YYYY-MM')`,
+      s: sql<string>`coalesce(sum(${expenses.amountUsd}), 0)`,
+    })
+    .from(expenses)
+    .groupBy(sql`to_char(${expenses.spentAt}, 'YYYY-MM')`);
+
+  const map = new Map<string, { rev: number; exp: number }>();
+  for (const r of rev) {
+    const m = map.get(r.month) ?? { rev: 0, exp: 0 };
+    m.rev += Number(r.s);
+    map.set(r.month, m);
+  }
+  for (const e of exp) {
+    const m = map.get(e.month) ?? { rev: 0, exp: 0 };
+    m.exp += Number(e.s);
+    map.set(e.month, m);
+  }
+
+  const rows: PnlMonth[] = [...map.entries()]
+    .map(([month, v]) => ({
+      month,
+      revenueUsd: r2(v.rev),
+      expenseUsd: r2(v.exp),
+      marginUsd: r2(v.rev - v.exp),
+    }))
+    .sort((a, b) => (a.month < b.month ? 1 : -1))
+    .slice(0, 12);
+
+  const totals = rows.reduce(
+    (t, r) => ({
+      revenueUsd: r2(t.revenueUsd + r.revenueUsd),
+      expenseUsd: r2(t.expenseUsd + r.expenseUsd),
+      marginUsd: r2(t.marginUsd + r.marginUsd),
+    }),
+    { revenueUsd: 0, expenseUsd: 0, marginUsd: 0 },
+  );
+  return { rows, totals };
 }
 
 export type BatchProfit = {

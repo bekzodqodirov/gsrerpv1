@@ -11,6 +11,7 @@ import {
   TRow,
   EmptyRow,
 } from "@/components/ui";
+import { ExportLink } from "@/components/export-link";
 
 function ageColor(days: number): string {
   if (days <= 15) return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200";
@@ -35,7 +36,9 @@ export default async function DebtorsPage() {
         <Link href="/finance" className="text-sm text-muted hover:text-foreground">
           ← {t("title")}
         </Link>
-        <PageHeader title={t("debtors")} />
+        <PageHeader title={t("debtors")}>
+          <ExportLink type="debtors" label={t("exportCsv")} />
+        </PageHeader>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -130,7 +130,8 @@
     "age_fresh": "0–7 kun",
     "age_warn": "8–15 kun",
     "age_old": "16–30 kun",
-    "age_critical": "30+ kun"
+    "age_critical": "30+ kun",
+    "exportCsv": "CSV eksport"
   },
   "tms": {
     "title": "Partiyalar (TMS)",
@@ -303,7 +304,12 @@
     "cost": "Xarajat",
     "margin": "Foyda",
     "route": "Yo'nalish",
-    "noProfitability": "Hozircha partiya ma'lumoti yo'q"
+    "noProfitability": "Hozircha partiya ma'lumoti yo'q",
+    "pnl": "P&L (oylik)",
+    "pnlDesc": "Oylik daromad va xarajat",
+    "month": "Oy",
+    "exportCsv": "CSV eksport",
+    "noData": "Ma'lumot yo'q"
   },
   "invoiceStatus": {
     "draft": "Qoralama",
