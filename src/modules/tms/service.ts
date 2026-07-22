@@ -2,7 +2,7 @@
 //
 // Kelishilgan narx (agreedPrice) — nozik ma'lumot. Faqat tms.manage huquqiga
 // ega foydalanuvchi ko'radi; sklad xodimiga hech qachon qaytarilmaydi.
-import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   carriers,
@@ -10,6 +10,7 @@ import {
   batchCargos,
   batchLines,
   batchBoxes,
+  batchPallets,
   cargos,
   cargoBoxes,
   cargoLines,
@@ -20,6 +21,7 @@ import {
   docSequences,
   attachments,
   users,
+  pallets,
 } from "@/db/schema";
 import type { ScanResult } from "./dto";
 import { palletBoxIds } from "@/modules/repack/service";
@@ -448,10 +450,53 @@ export async function getBatch(id: string) {
     }
   }
 
-  // Scan holati — qator bo'yicha (batch_box'da faqat yuklangan karobkalar bor).
+  // PLAN — YASHIK (paddon) birliklari: har biri 1 birlik (ichidagi karobkalar
+  // alohida sanalmaydi). Og'irlik/hajm ichidagilardan yig'iladi.
+  const palPlanRows = await db
+    .select({
+      id: batchPallets.id,
+      palletId: batchPallets.palletId,
+      code: pallets.code,
+      clientCode: clients.code,
+      clientName: clients.name,
+      loadedScan: batchPallets.loadedScan,
+      unloadedScan: batchPallets.unloadedScan,
+    })
+    .from(batchPallets)
+    .innerJoin(pallets, eq(batchPallets.palletId, pallets.id))
+    .innerJoin(clients, eq(pallets.clientId, clients.id))
+    .where(eq(batchPallets.batchId, id))
+    .orderBy(asc(pallets.code));
+  const batchPalletIdSet = new Set(palPlanRows.map((r) => r.palletId));
+  const palBoxRows = palPlanRows.length
+    ? await db
+        .select({
+          palletId: cargoBoxes.palletId,
+          lineKg: cargoLines.totalWeightKg,
+          lineM3: cargoLines.totalVolumeM3,
+          lineBoxCount: cargoLines.boxCount,
+        })
+        .from(cargoBoxes)
+        .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
+        .where(inArray(cargoBoxes.palletId, palPlanRows.map((r) => r.palletId)))
+    : [];
+  const palAgg = new Map<string, { count: number; kg: number; m3: number }>();
+  for (const r of palBoxRows) {
+    const pid = r.palletId!;
+    const a = palAgg.get(pid) ?? { count: 0, kg: 0, m3: 0 };
+    const n = r.lineBoxCount || 1;
+    a.count += 1;
+    a.kg += Number(r.lineKg) / n;
+    a.m3 += Number(r.lineM3) / n;
+    palAgg.set(pid, a);
+  }
+
+  // Scan holati — qator bo'yicha. Yashik BIRLIGIGA kirgan karobkalar bu yerda
+  // SANALMAYDI (ular yashik birligi sifatida alohida hisoblanadi).
   const bbRows = await db
     .select({
       lineId: cargoBoxes.lineId,
+      palletId: cargoBoxes.palletId,
       loaded: batchBoxes.loadedScan,
       unloaded: batchBoxes.unloadedScan,
       flag: batchBoxes.flag,
@@ -467,6 +512,8 @@ export async function getBatch(id: string) {
   let unloadDone = 0;
   let missingTotal = 0;
   for (const r of bbRows) {
+    // Yashik birligiga tegishli karobka — bo'sh (loose) hisobga kirmaydi.
+    if (r.palletId && batchPalletIdSet.has(r.palletId)) continue;
     const s = scanByLine.get(r.lineId) ?? { loaded: 0, unloaded: 0, missing: 0 };
     if (r.loaded) {
       s.loaded += 1;
@@ -482,6 +529,24 @@ export async function getBatch(id: string) {
     }
     scanByLine.set(r.lineId, s);
   }
+  const palLoaded = palPlanRows.filter((p) => p.loadedScan).length;
+  const palUnloaded = palPlanRows.filter((p) => p.unloadedScan).length;
+  const palletUnits = palPlanRows.map((p) => {
+    const a = palAgg.get(p.palletId) ?? { count: 0, kg: 0, m3: 0 };
+    return {
+      palletId: p.palletId,
+      code: p.code,
+      clientCode: p.clientCode,
+      clientName: p.clientName,
+      boxCount: a.count,
+      weightKg: Math.round(a.kg * 1000) / 1000,
+      volumeM3: Math.round(a.m3 * 10000) / 10000,
+      loaded: p.loadedScan,
+      unloaded: p.unloadedScan,
+    };
+  });
+  const palTotalKg = palletUnits.reduce((s, p) => s + p.weightKg, 0);
+  const palTotalM3 = palletUnits.reduce((s, p) => s + p.volumeM3, 0);
 
   // Kim nechta karobka yukladi (ishchilar hisobi):
   const workerRows = await db
@@ -559,6 +624,7 @@ export async function getBatch(id: string) {
         }
       : null,
     lines,
+    pallets: palletUnits,
     workers: workerRows.map((w) => ({
       name: w.fullName ?? "—",
       n: Number(w.n),
@@ -566,11 +632,19 @@ export async function getBatch(id: string) {
     totals: {
       lineCount: planTotals.lineCount,
       totalBoxes: totalPlanned,
-      totalWeightKg: Math.round(planTotals.kg * 1000) / 1000,
-      totalVolumeM3: Math.round(planTotals.m3 * 10000) / 10000,
+      palletCount: palPlanRows.length,
+      totalWeightKg: Math.round((planTotals.kg + palTotalKg) * 1000) / 1000,
+      totalVolumeM3: Math.round((planTotals.m3 + palTotalM3) * 10000) / 10000,
     },
-    loadProgress: { done: loadDone, total: totalPlanned },
-    unloadProgress: { done: unloadDone, total: bbRows.length },
+    // Yashik = 1 birlik: progress = bo'sh karobkalar + yashik birliklari.
+    loadProgress: {
+      done: loadDone + palLoaded,
+      total: totalPlanned + palPlanRows.length,
+    },
+    unloadProgress: {
+      done: unloadDone + palUnloaded,
+      total: loadDone + palLoaded,
+    },
     missingCount: missingTotal,
     canManage: session.perms.includes("*") || session.perms.includes("tms.manage"),
     canLoad:
@@ -606,23 +680,11 @@ export async function getBatchScanInfo(id: string) {
     return null;
   }
 
-  const [origin, dest, plannedRow, scanRow] = await Promise.all([
+  const [origin, dest, load, unload] = await Promise.all([
     db.query.warehouses.findFirst({ where: eq(warehouses.id, b.originWarehouseId) }),
     db.query.warehouses.findFirst({ where: eq(warehouses.id, b.destinationWarehouseId) }),
-    db
-      .select({
-        total: sql<number>`coalesce(sum(${batchLines.plannedBoxes}), 0)::int`,
-      })
-      .from(batchLines)
-      .where(eq(batchLines.batchId, id)),
-    db
-      .select({
-        loaded: sql<number>`count(*) filter (where ${batchBoxes.loadedScan})::int`,
-        unloaded: sql<number>`count(*) filter (where ${batchBoxes.unloadedScan})::int`,
-        total: sql<number>`count(*)::int`,
-      })
-      .from(batchBoxes)
-      .where(eq(batchBoxes.batchId, id)),
+    loadProgress(id),
+    unloadProgress(id),
   ]);
 
   const hasLoadPerm =
@@ -634,8 +696,8 @@ export async function getBatchScanInfo(id: string) {
     batch: { id: b.id, code: b.code, status: b.status },
     origin: origin ? { gsCode: origin.gsCode, name: origin.name } : null,
     dest: dest ? { gsCode: dest.gsCode, name: dest.name } : null,
-    loadProgress: { done: scanRow[0]?.loaded ?? 0, total: plannedRow[0]?.total ?? 0 },
-    unloadProgress: { done: scanRow[0]?.unloaded ?? 0, total: scanRow[0]?.total ?? 0 },
+    loadProgress: load,
+    unloadProgress: unload,
     canLoad: hasLoadPerm,
     // Tomonga bog'liq ruxsat: yuklash — faqat jo'natuvchi omborda, tushirish —
     // faqat qabul qiluvchi omborda (scanLoad/scanUnload ham shuni talab qiladi).
@@ -666,6 +728,37 @@ async function plannedInOpenBatches(
     .where(and(...conds))
     .groupBy(batchLines.lineId);
   return new Map(rows.map((r) => [r.lineId, Number(r.planned)]));
+}
+
+/** Ochiq (planned/loading) partiyalarda band qilingan YASHIKLAR (palletId to'plami). */
+async function palletsInOpenBatches(
+  excludeBatchId?: string,
+): Promise<Set<string>> {
+  const conds = [inArray(batches.status, ["planned", "loading"])];
+  if (excludeBatchId) conds.push(ne(batchPallets.batchId, excludeBatchId));
+  const rows = await db
+    .select({ palletId: batchPallets.palletId })
+    .from(batchPallets)
+    .innerJoin(batches, eq(batchPallets.batchId, batches.id))
+    .where(and(...conds));
+  return new Set(rows.map((r) => r.palletId));
+}
+
+/** Qatorlarning YOPIQ yashiklardagi karobkalari soni (qator bo'yicha) — bu
+ * karobkalar bo'sh (loose) planga kirmaydi, chunki yashik = 1 birlik. */
+async function boxesInClosedPalletsByLine(
+  lineIds: string[],
+): Promise<Map<string, number>> {
+  if (!lineIds.length) return new Map();
+  const rows = await db
+    .select({ lineId: cargoBoxes.lineId, n: count() })
+    .from(cargoBoxes)
+    .innerJoin(pallets, eq(cargoBoxes.palletId, pallets.id))
+    .where(
+      and(inArray(cargoBoxes.lineId, lineIds), eq(pallets.status, "closed")),
+    )
+    .groupBy(cargoBoxes.lineId);
+  return new Map(rows.map((r) => [r.lineId, Number(r.n)]));
 }
 
 /** Shu partiyada qator bo'yicha haqiqatda scan qilingan (yuklangan) karobkalar. */
@@ -729,6 +822,10 @@ export async function getAvailableLines(batchId: string) {
     columns: { lineId: true, plannedBoxes: true },
   });
   const thisPlanMap = new Map(thisPlan.map((p) => [p.lineId, p.plannedBoxes]));
+  // Yopiq yashiklardagi karobkalar bo'sh planga kirmaydi (yashik = 1 birlik).
+  const inClosedPallets = await boxesInClosedPalletsByLine(
+    rows.map((r) => r.lineId),
+  );
 
   // Har qatorning birinchi rasmi (bitta so'rovda):
   const lineIds = rows.map((r) => r.lineId);
@@ -758,7 +855,10 @@ export async function getAvailableLines(batchId: string) {
   return rows
     .map((r) => {
       const inOpen = planned.get(r.lineId) ?? 0;
-      const available = r.boxCount - inOpen;
+      const inPallet = inClosedPallets.get(r.lineId) ?? 0;
+      // Yopiq yashikdagi karobkalar bo'sh planga kirmaydi (yashik alohida birlik).
+      const looseTotal = Math.max(0, r.boxCount - inPallet);
+      const available = looseTotal - inOpen;
       const perBoxKg = r.boxCount ? Number(r.lineKg) / r.boxCount : 0;
       const perBoxM3 = r.boxCount ? Number(r.lineM3) / r.boxCount : 0;
       return {
@@ -770,7 +870,7 @@ export async function getAvailableLines(batchId: string) {
         productName: r.productName,
         clientCode: r.clientCode,
         clientName: r.clientName,
-        boxCount: r.boxCount,
+        boxCount: looseTotal,
         availableBoxes: available,
         plannedThisBatch: thisPlanMap.get(r.lineId) ?? 0,
         perBoxKg,
@@ -779,6 +879,103 @@ export async function getAvailableLines(batchId: string) {
       };
     })
     .filter((r) => r.availableBoxes > 0);
+}
+
+/**
+ * Plan tuzish uchun: origin ombordagi YOPIQ YASHIKLAR — har biri 1 BIRLIK
+ * (ichidagi karobkalar bilan). Boshqa ochiq partiyaga band bo'lganlari va
+ * yuklanib jo'nab ketganlari chiqarilmaydi.
+ */
+export async function getAvailablePallets(batchId: string) {
+  await requirePermission("tms.view");
+  const b = await db.query.batches.findFirst({ where: eq(batches.id, batchId) });
+  if (!b) return [];
+  const origin = await db.query.warehouses.findFirst({
+    where: eq(warehouses.id, b.originWarehouseId),
+  });
+  if (!origin) return [];
+  const sourceStatus = sourceStatusForOrigin(origin.kind);
+
+  const palRows = await db
+    .select({
+      palletId: pallets.id,
+      code: pallets.code,
+      clientCode: clients.code,
+      clientName: clients.name,
+    })
+    .from(pallets)
+    .innerJoin(clients, eq(pallets.clientId, clients.id))
+    .where(
+      and(
+        eq(pallets.warehouseId, b.originWarehouseId),
+        eq(pallets.status, "closed"),
+      ),
+    )
+    .orderBy(asc(pallets.code));
+  if (!palRows.length) return [];
+  const palletIds = palRows.map((r) => r.palletId);
+
+  // Har yashikning karobkalari (og'irlik/hajm) + ichidagi yuk hali origin'dami.
+  const boxRows = await db
+    .select({
+      palletId: cargoBoxes.palletId,
+      lineKg: cargoLines.totalWeightKg,
+      lineM3: cargoLines.totalVolumeM3,
+      lineBoxCount: cargoLines.boxCount,
+      cargoStatus: cargos.status,
+      cargoWh: cargos.currentWarehouseId,
+    })
+    .from(cargoBoxes)
+    .innerJoin(cargoLines, eq(cargoBoxes.lineId, cargoLines.id))
+    .innerJoin(cargos, eq(cargoBoxes.cargoId, cargos.id))
+    .where(inArray(cargoBoxes.palletId, palletIds));
+
+  const agg = new Map<
+    string,
+    { count: number; kg: number; m3: number; eligible: boolean }
+  >();
+  for (const r of boxRows) {
+    const pid = r.palletId!;
+    const a = agg.get(pid) ?? { count: 0, kg: 0, m3: 0, eligible: true };
+    const n = r.lineBoxCount || 1;
+    a.count += 1;
+    a.kg += Number(r.lineKg) / n;
+    a.m3 += Number(r.lineM3) / n;
+    // Yashik ichidagi biror yuk origin'da yotgan holatda bo'lmasa — mavjud emas.
+    if (r.cargoStatus !== sourceStatus || r.cargoWh !== b.originWarehouseId) {
+      a.eligible = false;
+    }
+    agg.set(pid, a);
+  }
+
+  const reserved = await palletsInOpenBatches(batchId);
+  const thisPlan = new Set(
+    (
+      await db
+        .select({ palletId: batchPallets.palletId })
+        .from(batchPallets)
+        .where(eq(batchPallets.batchId, batchId))
+    ).map((r) => r.palletId),
+  );
+
+  return palRows
+    .filter((r) => !reserved.has(r.palletId))
+    .map((r) => {
+      const a = agg.get(r.palletId) ?? { count: 0, kg: 0, m3: 0, eligible: false };
+      return {
+        palletId: r.palletId,
+        code: r.code,
+        clientCode: r.clientCode,
+        clientName: r.clientName,
+        boxCount: a.count,
+        weightKg: Math.round(a.kg * 1000) / 1000,
+        volumeM3: Math.round(a.m3 * 10000) / 10000,
+        plannedThisBatch: thisPlan.has(r.palletId),
+        eligible: a.eligible,
+      };
+    })
+    // Bo'sh yoki jo'nab ketgan yashiklar (rejadagidan tashqari) chiqmaydi.
+    .filter((r) => r.boxCount > 0 && (r.eligible || r.plannedThisBatch));
 }
 
 async function assertPlannable(batchId: string) {
@@ -881,6 +1078,47 @@ export async function removePlanLine(batchId: string, lineId: string) {
   });
 }
 
+// ─── Plan: YASHIK (paddon) birliklarini qo'shish/olib tashlash ───────────────
+
+/** Yopiq yashikni partiya planiga BITTA BIRLIK bo'lib qo'shish. */
+export async function addPlanPallets(batchId: string, palletIds: string[]) {
+  const session = await requireAny(["tms.manage", "tms.load"]);
+  const b = await assertPlannable(batchId);
+  assertWarehouseScope(session, b.originWarehouseId);
+
+  const reserved = await palletsInOpenBatches(batchId);
+  for (const palletId of palletIds) {
+    const pal = await db.query.pallets.findFirst({
+      where: eq(pallets.id, palletId),
+    });
+    if (!pal || pal.status !== "closed") throw new Error("PALLET_NOT_READY");
+    if (pal.warehouseId !== b.originWarehouseId) {
+      throw new Error("PALLET_NOT_AT_ORIGIN");
+    }
+    if (reserved.has(palletId)) throw new Error("PALLET_RESERVED");
+    await db
+      .insert(batchPallets)
+      .values({ batchId, palletId })
+      .onConflictDoNothing();
+  }
+}
+
+/** Yashik birligini plandan olib tashlash — faqat hali yuklanmagan bo'lsa. */
+export async function removePlanPallet(batchId: string, palletId: string) {
+  const session = await requireAny(["tms.manage", "tms.load"]);
+  const b = await assertPlannable(batchId);
+  assertWarehouseScope(session, b.originWarehouseId);
+  const row = await db.query.batchPallets.findFirst({
+    where: and(
+      eq(batchPallets.batchId, batchId),
+      eq(batchPallets.palletId, palletId),
+    ),
+  });
+  if (!row) return;
+  if (row.loadedScan) throw new Error("HAS_SCANS");
+  await db.delete(batchPallets).where(eq(batchPallets.id, row.id));
+}
+
 // ─── Scan: yuklash (chiqish) va tushirish (qabul) ────────────────────────────
 
 /** Bitta karobka etiketkasidan olingan "human" yorlig'i. */
@@ -900,36 +1138,100 @@ async function boxLabel(boxId: string, done: number, total: number) {
   return r ? `${r.clientCode} · ${r.product} · ${done}/${total}` : undefined;
 }
 
+// Yashik (paddon) = 1 BIRLIK: progress'da yashik ichidagi karobkalar alohida
+// SANALMAYDI; bo'sh (loose) karobkalar + yashik birliklari birga hisoblanadi.
+// Bo'sh karobka = shu partiya batch_pallet'iga tegishli bo'lmagan karobka.
+const looseBoxCond = (batchId: string) =>
+  and(
+    eq(batchBoxes.batchId, batchId),
+    isNull(batchPallets.id), // yashik birligiga kirmagan
+  );
+
 async function loadProgress(batchId: string) {
-  // total = plan kvotalari yig'indisi; done = haqiqatda yuklangan karobkalar.
-  const [tot] = await db
+  const [looseTot] = await db
     .select({ total: sql<number>`coalesce(sum(${batchLines.plannedBoxes}), 0)::int` })
     .from(batchLines)
     .where(eq(batchLines.batchId, batchId));
-  const [ld] = await db
+  const [palTot] = await db
+    .select({ total: count() })
+    .from(batchPallets)
+    .where(eq(batchPallets.batchId, batchId));
+  const [looseDone] = await db
     .select({ done: count() })
     .from(batchBoxes)
-    .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
-  return { done: Number(ld.done), total: Number(tot.total) };
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .leftJoin(
+      batchPallets,
+      and(
+        eq(batchPallets.batchId, batchId),
+        eq(batchPallets.palletId, cargoBoxes.palletId),
+      ),
+    )
+    .where(and(looseBoxCond(batchId), eq(batchBoxes.loadedScan, true)));
+  const [palDone] = await db
+    .select({ done: count() })
+    .from(batchPallets)
+    .where(
+      and(eq(batchPallets.batchId, batchId), eq(batchPallets.loadedScan, true)),
+    );
+  return {
+    done: Number(looseDone.done) + Number(palDone.done),
+    total: Number(looseTot.total) + Number(palTot.total),
+  };
 }
 
 async function unloadProgress(batchId: string) {
-  const [tot] = await db
+  // Jo'natilgan (yuklangan) bo'sh karobkalar + yuklangan yashiklar = total.
+  const [looseTot] = await db
     .select({ total: count() })
     .from(batchBoxes)
-    .where(eq(batchBoxes.batchId, batchId));
-  const [ul] = await db
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .leftJoin(
+      batchPallets,
+      and(
+        eq(batchPallets.batchId, batchId),
+        eq(batchPallets.palletId, cargoBoxes.palletId),
+      ),
+    )
+    .where(looseBoxCond(batchId));
+  const [looseDone] = await db
     .select({ done: count() })
     .from(batchBoxes)
-    .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.unloadedScan, true)));
-  return { done: ul.done, total: tot.total };
+    .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
+    .leftJoin(
+      batchPallets,
+      and(
+        eq(batchPallets.batchId, batchId),
+        eq(batchPallets.palletId, cargoBoxes.palletId),
+      ),
+    )
+    .where(and(looseBoxCond(batchId), eq(batchBoxes.unloadedScan, true)));
+  const [palTot] = await db
+    .select({ total: count() })
+    .from(batchPallets)
+    .where(
+      and(eq(batchPallets.batchId, batchId), eq(batchPallets.loadedScan, true)),
+    );
+  const [palDone] = await db
+    .select({ done: count() })
+    .from(batchPallets)
+    .where(
+      and(
+        eq(batchPallets.batchId, batchId),
+        eq(batchPallets.unloadedScan, true),
+      ),
+    );
+  return {
+    done: Number(looseDone.done) + Number(palDone.done),
+    total: Number(looseTot.total) + Number(palTot.total),
+  };
 }
 
-/** Yuklash scani: karobka QR kodini scan qiladi (kamera/skaner/qo'lda). */
 /**
- * Yashik (paddon) QR'i scan qilinganda: ichidagi karobkalar birvarakay
- * yuklanadi (plan kvotasi doirasida) yoki tushiriladi. Kod yashik bo'lmasa
- * null qaytaradi (chaqiruvchi oddiy karobka scaniga o'tadi).
+ * Yashik (paddon) QR/kodi scan qilinganda: yashik BITTA BIRLIK sifatida
+ * yuklanadi yoki tushiriladi (ichidagi karobkalar alohida sanalmaydi, lekin
+ * jo'natish/tushirishda holat ko'chishi uchun batch_box'ga yoziladi).
+ * Kod yashik bo'lmasa null qaytaradi (chaqiruvchi oddiy karobka scaniga o'tadi).
  */
 async function applyPalletScan(
   batchId: string,
@@ -939,79 +1241,67 @@ async function applyPalletScan(
 ): Promise<ScanResult | null> {
   const pal = await palletBoxIds(code);
   if (!pal) return null; // yashik emas
-  if (pal.boxIds.length === 0) {
-    return { outcome: mode === "load" ? "not_on_plan" : "extra", code };
-  }
+
+  // Yashik shu partiyaga rejalashtirilganmi?
+  const planned = await db.query.batchPallets.findFirst({
+    where: and(
+      eq(batchPallets.batchId, batchId),
+      eq(batchPallets.palletId, pal.palletId),
+    ),
+  });
 
   if (mode === "unload") {
-    // Tushirish: partiyadagi (yuklangan) shu yashik karobkalarini belgilaymiz.
-    const bbs = await db
-      .select({ id: batchBoxes.id, done: batchBoxes.unloadedScan })
-      .from(batchBoxes)
-      .where(
-        and(
-          eq(batchBoxes.batchId, batchId),
-          inArray(batchBoxes.boxId, pal.boxIds),
-        ),
-      );
-    if (bbs.length === 0) return { outcome: "extra", code };
-    const pending = bbs.filter((x) => !x.done).map((x) => x.id);
-    if (pending.length === 0) {
+    if (!planned) return { outcome: "extra", code };
+    if (!planned.loadedScan) return { outcome: "not_on_plan", code };
+    if (planned.unloadedScan) {
       const p = await unloadProgress(batchId);
       return { outcome: "duplicate", code, done: p.done, total: p.total };
     }
     const now = new Date();
-    await db
-      .update(batchBoxes)
-      .set({ unloadedScan: true, unloadedAt: now, unloadedBy: userId, flag: null })
-      .where(inArray(batchBoxes.id, pending));
+    await db.transaction(async (tx) => {
+      if (pal.boxIds.length) {
+        await tx
+          .update(batchBoxes)
+          .set({ unloadedScan: true, unloadedAt: now, unloadedBy: userId, flag: null })
+          .where(
+            and(
+              eq(batchBoxes.batchId, batchId),
+              inArray(batchBoxes.boxId, pal.boxIds),
+              eq(batchBoxes.unloadedScan, false),
+            ),
+          );
+      }
+      await tx
+        .update(batchPallets)
+        .set({ unloadedScan: true, unloadedAt: now, unloadedBy: userId })
+        .where(eq(batchPallets.id, planned.id));
+    });
     const p = await unloadProgress(batchId);
     return {
       outcome: "unloaded",
       code,
       done: p.done,
       total: p.total,
-      label: `📦 ${code} · ${pending.length}`,
+      label: `📦 ${code} · ${pal.boxIds.length} karobka`,
     };
   }
 
-  // Yuklash: yashik ichidagi karobkalarni plan kvotalari doirasida qo'shamiz.
+  // Yuklash
+  if (!planned) return { outcome: "not_on_plan", code };
+  if (planned.loadedScan) {
+    const p = await loadProgress(batchId);
+    return { outcome: "duplicate", code, done: p.done, total: p.total };
+  }
+  if (pal.boxIds.length === 0) return { outcome: "not_on_plan", code };
+
   const boxes = await db
-    .select({ id: cargoBoxes.id, lineId: cargoBoxes.lineId, cargoId: cargoBoxes.cargoId })
+    .select({ id: cargoBoxes.id, cargoId: cargoBoxes.cargoId })
     .from(cargoBoxes)
     .where(inArray(cargoBoxes.id, pal.boxIds));
 
-  const result = await db.transaction(async (tx): Promise<ScanResult> => {
-    // Kvota poygasini oldini olish: shu partiya plan qatorlarini qulflaymiz.
-    const plan = await tx
-      .select()
-      .from(batchLines)
-      .where(eq(batchLines.batchId, batchId))
-      .for("update");
-    const planByLine = new Map(plan.map((p) => [p.lineId, p.plannedBoxes]));
-
-    const scannedRows = await tx
-      .select({ lineId: cargoBoxes.lineId, boxId: batchBoxes.boxId })
-      .from(batchBoxes)
-      .innerJoin(cargoBoxes, eq(batchBoxes.boxId, cargoBoxes.id))
-      .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
-    const scannedByLineMap = new Map<string, number>();
-    const inBatch = new Set<string>();
-    for (const r of scannedRows) {
-      scannedByLineMap.set(r.lineId, (scannedByLineMap.get(r.lineId) ?? 0) + 1);
-      inBatch.add(r.boxId);
-    }
-
-    const now = new Date();
-    let added = 0;
-    let skipped = 0;
+  const now = new Date();
+  await db.transaction(async (tx) => {
     for (const bx of boxes) {
-      const planned = planByLine.get(bx.lineId);
-      const scanned = scannedByLineMap.get(bx.lineId) ?? 0;
-      if (planned == null || inBatch.has(bx.id) || scanned >= planned) {
-        skipped += 1;
-        continue;
-      }
       await tx
         .insert(batchBoxes)
         .values({
@@ -1023,25 +1313,25 @@ async function applyPalletScan(
           loadedBy: userId,
         })
         .onConflictDoNothing();
-      scannedByLineMap.set(bx.lineId, scanned + 1);
-      added += 1;
     }
-    if (added === 0) {
-      return { outcome: "quota_full", code, label: `📦 ${code} · 0/+${skipped}` };
-    }
+    await tx
+      .update(batchPallets)
+      .set({ loadedScan: true, loadedAt: now, loadedBy: userId })
+      .where(eq(batchPallets.id, planned.id));
     await tx
       .update(batches)
       .set({ status: "loading", updatedAt: now })
       .where(and(eq(batches.id, batchId), eq(batches.status, "planned")));
-    return {
-      outcome: "loaded",
-      code,
-      label: `📦 ${code} · +${added}${skipped ? ` (${skipped} o'tkazildi)` : ""}`,
-    };
   });
 
   const p = await loadProgress(batchId);
-  return { ...result, done: p.done, total: p.total };
+  return {
+    outcome: "loaded",
+    code,
+    done: p.done,
+    total: p.total,
+    label: `📦 ${code} · ${boxes.length} karobka`,
+  };
 }
 
 export async function scanLoad(batchId: string, code: string): Promise<ScanResult> {
@@ -1418,9 +1708,17 @@ export async function getScanLines(batchId: string) {
     .where(eq(batchLines.batchId, batchId))
     .orderBy(asc(clients.code), asc(cargoLines.lineNo));
 
+  // Yashik birligiga kirgan karobkalarni bo'sh (loose) hisobdan chiqaramiz.
+  const palIdRows = await db
+    .select({ palletId: batchPallets.palletId })
+    .from(batchPallets)
+    .where(eq(batchPallets.batchId, batchId));
+  const batchPalletIdSet = new Set(palIdRows.map((r) => r.palletId));
+
   const bb = await db
     .select({
       lineId: cargoBoxes.lineId,
+      palletId: cargoBoxes.palletId,
       loaded: batchBoxes.loadedScan,
       unloaded: batchBoxes.unloadedScan,
     })
@@ -1429,31 +1727,67 @@ export async function getScanLines(batchId: string) {
     .where(eq(batchBoxes.batchId, batchId));
   const counts = new Map<string, { loaded: number; unloaded: number }>();
   for (const r of bb) {
+    if (r.palletId && batchPalletIdSet.has(r.palletId)) continue;
     const c = counts.get(r.lineId) ?? { loaded: 0, unloaded: 0 };
     if (r.loaded) c.loaded += 1;
     if (r.unloaded) c.unloaded += 1;
     counts.set(r.lineId, c);
   }
-  return planRows.map((r) => {
+
+  const lineItems = planRows.map((r) => {
     const c = counts.get(r.lineId) ?? { loaded: 0, unloaded: 0 };
     return {
-      lineId: r.lineId,
+      kind: "line" as const,
+      id: r.lineId,
       title: `${r.clientCode}-${r.letterCode} · ${r.productName}`,
       planned: r.planned,
       loaded: c.loaded,
       unloaded: c.unloaded,
     };
   });
+
+  // YASHIK birliklari (har biri 1) — manual panelda ham tanlansa bo'ladi.
+  const palRows = await db
+    .select({
+      palletId: batchPallets.palletId,
+      code: pallets.code,
+      clientCode: clients.code,
+      loaded: batchPallets.loadedScan,
+      unloaded: batchPallets.unloadedScan,
+    })
+    .from(batchPallets)
+    .innerJoin(pallets, eq(batchPallets.palletId, pallets.id))
+    .innerJoin(clients, eq(pallets.clientId, clients.id))
+    .where(eq(batchPallets.batchId, batchId))
+    .orderBy(asc(pallets.code));
+  const palItems = palRows.map((r) => ({
+    kind: "pallet" as const,
+    id: r.palletId,
+    title: `📦 ${r.code} · ${r.clientCode}`,
+    planned: 1,
+    loaded: r.loaded ? 1 : 0,
+    unloaded: r.unloaded ? 1 : 0,
+  }));
+
+  return [...lineItems, ...palItems];
 }
 
-/** Qo'lda bitta karobkani belgilash: qatorning navbatdagi bo'sh karobkasini
- * topib, oddiy scan yo'li bilan qayd etadi (barcha kvota/qoidalar saqlanadi). */
+/** Qo'lda bitta birlikni belgilash: qatorning navbatdagi bo'sh karobkasini
+ * yoki YASHIK birligini oddiy scan yo'li bilan qayd etadi (qoidalar saqlanadi). */
 export async function manualMark(
   batchId: string,
-  lineId: string,
+  id: string,
   mode: "load" | "unload",
+  kind: "line" | "pallet" = "line",
 ): Promise<ScanResult> {
-  await requireAny(["tms.load", "tms.manage"]);
+  const session = await requireAny(["tms.load", "tms.manage"]);
+
+  if (kind === "pallet") {
+    const pal = await db.query.pallets.findFirst({ where: eq(pallets.id, id) });
+    if (!pal) return { outcome: "unknown", code: "" };
+    const res = await applyPalletScan(batchId, pal.code, mode, session.sub);
+    return res ?? { outcome: "unknown", code: pal.code };
+  }
 
   if (mode === "load") {
     const loaded = await db
@@ -1462,11 +1796,11 @@ export async function manualMark(
       .where(and(eq(batchBoxes.batchId, batchId), eq(batchBoxes.loadedScan, true)));
     const loadedSet = new Set(loaded.map((x) => x.boxId));
     const candidates = await db
-      .select({ id: cargoBoxes.id, qrCode: cargoBoxes.qrCode })
+      .select({ boxId: cargoBoxes.id, qrCode: cargoBoxes.qrCode })
       .from(cargoBoxes)
-      .where(eq(cargoBoxes.lineId, lineId))
+      .where(eq(cargoBoxes.lineId, id))
       .orderBy(asc(cargoBoxes.boxNo));
-    const pick = candidates.find((c) => !loadedSet.has(c.id));
+    const pick = candidates.find((c) => !loadedSet.has(c.boxId));
     if (!pick) return { outcome: "quota_full", code: "" };
     return scanLoad(batchId, pick.qrCode);
   }
@@ -1479,7 +1813,7 @@ export async function manualMark(
     .where(
       and(
         eq(batchBoxes.batchId, batchId),
-        eq(cargoBoxes.lineId, lineId),
+        eq(cargoBoxes.lineId, id),
         eq(batchBoxes.loadedScan, true),
         eq(batchBoxes.unloadedScan, false),
       ),

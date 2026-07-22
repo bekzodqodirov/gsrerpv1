@@ -1,13 +1,18 @@
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link, redirect } from "@/i18n/routing";
-import { getBatch, getAvailableLines } from "@/modules/tms/service";
+import {
+  getBatch,
+  getAvailableLines,
+  getAvailablePallets,
+} from "@/modules/tms/service";
 import { Card, TableWrap, Th, Td, TRow, EmptyRow } from "@/components/ui";
 import { PhotoThumbs } from "@/components/photo-lightbox";
 import { icons } from "@/components/icons";
 import { FillBar } from "../fill-bar";
 import { PlanBuilder } from "../plan-builder";
 import { PlanLineControls } from "../plan-line-controls";
+import { PalletPlan } from "../pallet-plan";
 
 // Plan tuzish sahifasi — menejer/yuk beruvchi uchun: joriy plan (miqdorlarni
 // o'zgartirish/olib tashlash bilan) + ombordagi tovarlardan qo'shish.
@@ -23,7 +28,7 @@ export default async function BatchPlanPage({
   if (!data) notFound();
 
   const t = await getTranslations("tms");
-  const { batch, origin, dest, carrier, lines, totals, canLoad } = data;
+  const { batch, origin, dest, carrier, lines, pallets, totals, canLoad } = data;
   const editable = batch.status === "planned" || batch.status === "loading";
   if (!editable || !canLoad) {
     redirect({ href: `/tms/${id}`, locale });
@@ -34,7 +39,10 @@ export default async function BatchPlanPage({
 
   const capKg = carrier?.capacityKg ? Number(carrier.capacityKg) : null;
   const capM3 = carrier?.capacityM3 ? Number(carrier.capacityM3) : null;
-  const available = await getAvailableLines(id);
+  const [available, availablePallets] = await Promise.all([
+    getAvailableLines(id),
+    getAvailablePallets(id),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -68,10 +76,20 @@ export default async function BatchPlanPage({
         </Card>
       )}
 
+      {/* Yashik (paddon) birliklari — har biri 1 birlik */}
+      <PalletPlan
+        batchId={id}
+        planned={pallets}
+        available={availablePallets}
+      />
+
       {/* Joriy plan — miqdor o'zgartirish / olib tashlash */}
       <div>
         <h2 className="mb-2 text-sm font-semibold text-muted">
           {t("currentPlan")} · {num(totals.totalBoxes)} {t("boxesShort")}
+          {totals.palletCount > 0 && (
+            <> · {num(totals.palletCount)} {t("palletUnits").toLowerCase()}</>
+          )}
         </h2>
         <TableWrap>
           <thead>

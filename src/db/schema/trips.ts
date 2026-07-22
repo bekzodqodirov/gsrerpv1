@@ -19,7 +19,7 @@ import {
 import { integer } from "drizzle-orm/pg-core";
 import { warehouses, currencies } from "./catalog";
 import { users } from "./system";
-import { cargos, cargoBoxes, cargoLines } from "./cargo";
+import { cargos, cargoBoxes, cargoLines, pallets } from "./cargo";
 
 // Partiya bosqichlari:
 export const batchStatusEnum = pgEnum("batch_status", [
@@ -151,6 +151,40 @@ export const batchLines = pgTable(
     index("batch_line_batch_idx").on(t.batchId),
     index("batch_line_line_idx").on(t.lineId),
     unique("batch_line_uq").on(t.batchId, t.lineId),
+  ],
+);
+
+// ─── Partiya YASHIKLARI (qayta upakovka: yashik = 1 birlik) ──────────────────
+// Yopiq yashik partiyaga BITTA BIRLIK bo'lib rejalanadi va yuklanadi (ichidagi
+// karobkalar alohida sanalmaydi). Ichki karobkalar jo'natish/tushirishda holat
+// ko'chishi uchun batch_box'ga ham yoziladi, lekin PROGRESS'da yashik = 1.
+export const batchPallets = pgTable(
+  "batch_pallet",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => batches.id, { onDelete: "cascade" }),
+    palletId: uuid("pallet_id")
+      .notNull()
+      .references(() => pallets.id),
+
+    loadedScan: boolean("loaded_scan").notNull().default(false),
+    loadedAt: timestamp("loaded_at", { withTimezone: true }),
+    loadedBy: uuid("loaded_by").references(() => users.id),
+
+    unloadedScan: boolean("unloaded_scan").notNull().default(false),
+    unloadedAt: timestamp("unloaded_at", { withTimezone: true }),
+    unloadedBy: uuid("unloaded_by").references(() => users.id),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("batch_pallet_batch_idx").on(t.batchId),
+    index("batch_pallet_pallet_idx").on(t.palletId),
+    unique("batch_pallet_uq").on(t.batchId, t.palletId),
   ],
 );
 

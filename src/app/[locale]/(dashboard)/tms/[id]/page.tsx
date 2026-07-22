@@ -50,6 +50,7 @@ export default async function BatchDetailPage({
     dest,
     carrier,
     lines,
+    pallets,
     workers,
     totals,
     canManage,
@@ -291,6 +292,53 @@ export default async function BatchDetailPage({
         <StatCard value={num(totals.totalWeightKg)} label={`${t("weight")}, kg`} />
         <StatCard value={num(totals.lineCount)} label={t("products")} />
       </div>
+
+      {/* ─── Yashik (paddon) birliklari — har biri 1 birlik ─── */}
+      {pallets.length > 0 && (
+        <Card className="p-3">
+          <div className="mb-1.5 flex items-center gap-2 text-[11px] font-bold tracking-wider text-muted uppercase">
+            {icons.stock("h-3.5 w-3.5")}
+            {t("palletUnits")} · {num(pallets.length)}
+          </div>
+          <ul className="space-y-1.5">
+            {pallets.map((p) => (
+              <li
+                key={p.palletId}
+                className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm"
+              >
+                <span className="font-mono font-bold">{p.code}</span>
+                <span className="font-mono text-xs text-muted">
+                  {p.clientCode}
+                </span>
+                <span className="ml-auto text-xs text-muted">
+                  {num(p.boxCount)} {t("boxesShort")} · {num(p.weightKg, 1)} kg ·{" "}
+                  {num(p.volumeM3, 2)} m³
+                </span>
+                <span
+                  className={
+                    "rounded-md px-2 py-0.5 text-xs font-bold " +
+                    (unloadable || batch.status === "unloaded"
+                      ? p.unloaded
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                      : p.loaded
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+                        : "bg-surface text-muted")
+                  }
+                >
+                  {unloadable || batch.status === "unloaded"
+                    ? p.unloaded
+                      ? "✓"
+                      : "—"
+                    : p.loaded
+                      ? "✓"
+                      : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* ─── Ishchilar hisobi: kim nechta karobka yukladi ─── */}
       {workers.length > 0 && (

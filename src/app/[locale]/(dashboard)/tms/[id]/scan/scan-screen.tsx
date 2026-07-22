@@ -19,7 +19,8 @@ import {
 
 type Mode = "load" | "unload";
 type ScanLine = {
-  lineId: string;
+  kind: "line" | "pallet";
+  id: string;
   title: string;
   planned: number;
   loaded: number;
@@ -153,11 +154,11 @@ export function ScanScreen({
     }
   }
 
-  async function handleManual(lineId: string) {
+  async function handleManual(item: ScanLine) {
     if (manualBusy) return;
-    setManualBusy(lineId);
+    setManualBusy(item.id);
     try {
-      const r = await manualMarkAction(batchId, lineId, mode);
+      const r = await manualMarkAction(batchId, item.id, mode, item.kind);
       beep(OUTCOME_STYLE[r.outcome]?.good ?? false);
       setFlash(r);
     } finally {
@@ -359,10 +360,10 @@ export function ScanScreen({
                 const disabled = manualBusy != null || remaining <= 0;
                 return (
                   <button
-                    key={l.lineId}
+                    key={l.id}
                     type="button"
                     disabled={disabled}
-                    onClick={() => handleManual(l.lineId)}
+                    onClick={() => handleManual(l)}
                     className="flex w-full touch-manipulation items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2.5 text-left text-sm hover:bg-surface-2 disabled:opacity-40"
                   >
                     <span className="min-w-0 flex-1 truncate">{l.title}</span>
@@ -372,7 +373,7 @@ export function ScanScreen({
                         : `${l.unloaded}/${l.loaded}`}
                     </span>
                     <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-bold text-white">
-                      {manualBusy === l.lineId ? "…" : "+1"}
+                      {manualBusy === l.id ? "…" : "+1"}
                     </span>
                   </button>
                 );

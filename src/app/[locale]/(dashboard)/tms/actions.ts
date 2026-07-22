@@ -9,6 +9,8 @@ import {
   setPlanLine,
   addPlanLines,
   removePlanLine,
+  addPlanPallets,
+  removePlanPallet,
   startLoading,
   departBatch,
   arriveBatch,
@@ -173,6 +175,40 @@ export async function removePlanLineAction(batchId: string, lineId: string) {
   revalidateTms();
 }
 
+/** Plan tuzuvchidan: tanlangan YOPIQ YASHIKLARni (1 birlik) qo'shish. */
+export async function addPlanPalletsAction(
+  batchId: string,
+  palletIds: string[],
+): Promise<PlanActionResult> {
+  if (!Array.isArray(palletIds) || palletIds.length === 0) {
+    return { error: "validation" };
+  }
+  try {
+    await addPlanPallets(batchId, palletIds);
+    revalidateTms();
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "PALLET_RESERVED") return { error: "palletReserved" };
+    if (msg === "PALLET_NOT_READY") return { error: "palletNotReady" };
+    console.error("[tms] addPlanPallets:", e);
+    return { error: "server" };
+  }
+}
+
+export async function removePlanPalletAction(batchId: string, palletId: string) {
+  try {
+    await removePlanPallet(batchId, palletId);
+    revalidateTms();
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "HAS_SCANS") return { error: "hasScans" };
+    console.error("[tms] removePlanPallet:", e);
+    return { error: "server" };
+  }
+}
+
 export async function startLoadingAction(batchId: string) {
   await startLoading(batchId);
   revalidateTms();
@@ -253,11 +289,12 @@ export async function scanUnloadAction(
  * tanlab bitta karobkani yuklandi/tushirildi deb belgilaydi. */
 export async function manualMarkAction(
   batchId: string,
-  lineId: string,
+  id: string,
   mode: "load" | "unload",
+  kind: "line" | "pallet" = "line",
 ): Promise<ScanResult> {
   try {
-    const res = await manualMark(batchId, lineId, mode);
+    const res = await manualMark(batchId, id, mode, kind);
     revalidateTms();
     return res;
   } catch (e) {

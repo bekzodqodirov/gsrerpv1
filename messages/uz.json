@@ -330,7 +330,11 @@
     "perBoxKg": "kg/karobka",
     "manualMark": "Qo'lda belgilash (stikersiz)",
     "manualHint": "Stiker yo'q yoki tugagan bo'lsa — tovarni tanlab bittadan belgilang.",
-    "archiveTitle": "Arxiv"
+    "archiveTitle": "Arxiv",
+    "palletUnits": "Yashiklar (paddon)",
+    "palletUnitsHint": "Yopiq yashik = 1 birlik. QR/ID sini bir marta skan qilsangiz — butun yashik yuklanadi.",
+    "palletReserved": "Bu yashik boshqa ochiq partiyada band",
+    "palletNotReady": "Yashik yopilmagan yoki bu omborda emas"
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",
