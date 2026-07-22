@@ -329,7 +329,8 @@
     "light": "Yengil",
     "perBoxKg": "kg/karobka",
     "manualMark": "Qo'lda belgilash (stikersiz)",
-    "manualHint": "Stiker yo'q yoki tugagan bo'lsa — tovarni tanlab bittadan belgilang."
+    "manualHint": "Stiker yo'q yoki tugagan bo'lsa — tovarni tanlab bittadan belgilang.",
+    "archiveTitle": "Arxiv"
   },
   "batchStatus": {
     "planned": "Rejalashtirildi",

@@ -45,6 +45,9 @@ export default async function TmsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title={t("title")}>
+        <Link href="/tms/archive">
+          <Button variant="outline">{t("archiveTitle")}</Button>
+        </Link>
         <Link href="/tms/consolidation">
           <Button variant="outline">
             {icons.stock("h-4 w-4")}

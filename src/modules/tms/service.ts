@@ -227,12 +227,42 @@ export async function updateBatch(id: string, input: BatchUpdateInput) {
  * kutilyapti). Jo'nab ketgan/yopilgan partiya skladchiga endi kerak emas.
  * Skladga biriktirilgan MENEJER (tms.manage) esa o'z omborining BARCHA
  * partiyalarini ko'radi — unloaded'ni yopish (closeBatch) uning vazifasi. */
-export async function listBatches() {
+export async function listBatches(opts: { archived?: boolean } = {}) {
   const session = await requirePermission("tms.view");
   const isManager =
     session.perms.includes("*") || session.perms.includes("tms.manage");
+  const archived = opts.archived === true;
   const conds = [];
-  if (session.warehouseId) {
+
+  // ARXIV: jo'natilgan/qabul qilingan (yakunlangan) partiyalar — keyin ko'rish
+  // uchun. Skladchi o'zi JO'NATGANini (origin) va QABUL qilganini (dest)
+  // ko'radi; menejer barcha yopilgan/tushirilgan partiyalarni.
+  if (archived) {
+    if (session.warehouseId && !isManager) {
+      conds.push(
+        or(
+          and(
+            eq(batches.originWarehouseId, session.warehouseId),
+            inArray(batches.status, ["departed", "arrived", "unloaded", "closed"]),
+          ),
+          and(
+            eq(batches.destinationWarehouseId, session.warehouseId),
+            inArray(batches.status, ["unloaded", "closed"]),
+          ),
+        )!,
+      );
+    } else {
+      conds.push(inArray(batches.status, ["unloaded", "closed"]));
+      if (session.warehouseId) {
+        conds.push(
+          or(
+            eq(batches.originWarehouseId, session.warehouseId),
+            eq(batches.destinationWarehouseId, session.warehouseId),
+          )!,
+        );
+      }
+    }
+  } else if (session.warehouseId) {
     conds.push(
       isManager
         ? or(
